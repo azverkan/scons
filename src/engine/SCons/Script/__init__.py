@@ -303,6 +303,7 @@ GlobalDefaultEnvironmentFunctions = [
     'Local',
     'ParseDepends',
     'Precious',
+    'Project',
     'Repository',
     'SConsignFile',
     'SideEffect',

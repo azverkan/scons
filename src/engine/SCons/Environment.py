@@ -52,6 +52,7 @@ import SCons.Node.Alias
 import SCons.Node.FS
 import SCons.Node.Python
 import SCons.Platform
+import SCons.Project
 import SCons.SConsign
 import SCons.Sig
 import SCons.Subst
@@ -717,6 +718,11 @@ class SubstitutionEnvironment:
             self[key] = t
         return self
 
+class Project(SubstitutionEnvironment, SCons.Project.Base):
+    """Final class representing a Project.
+    """
+    pass
+
 class Base(SubstitutionEnvironment):
     """Base class for "real" construction Environments.  These are the
     primary objects used to communicate dependency and construction
@@ -1294,6 +1300,16 @@ class Base(SubstitutionEnvironment):
                 else:
                     self._dict[key] = val + dk
         self.scanner_map_delete(kw)
+
+    def Project(self, name=None, version=None, author=None, *args, **kwargs):
+        print self, name, version, author, args, kwargs
+
+        if name is None:
+            raise "TODO/jph: Current project is not tracked yet"
+        if version is None:
+            raise "TODO/jph: Finding project not supported yet"
+
+        return Project(NAME=name, VERSION=version, AUTHOR=author, *args, **kwargs)
 
     def Replace(self, **kw):
         """Replace existing construction variables in an Environment
