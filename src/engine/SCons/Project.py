@@ -51,7 +51,17 @@ class DirectoryHierarchy:
         self.lisp = "${DIR.dataroot}/emacs/site-lisp"
         self.locale = "${DIR.dataroot}/locale"
         self.man = "${DIR.dataroot}/man"
-        self.manX = "${DIR.man}/manX" # X=1,...,9,l,n
+        self.man1 = "${DIR.man}/man1"
+        self.man2 = "${DIR.man}/man2"
+        self.man3 = "${DIR.man}/man3"
+        self.man4 = "${DIR.man}/man4"
+        self.man5 = "${DIR.man}/man5"
+        self.man6 = "${DIR.man}/man6"
+        self.man7 = "${DIR.man}/man7"
+        self.man8 = "${DIR.man}/man8"
+        self.man9 = "${DIR.man}/man9"
+        self.manl = "${DIR.man}/manl"
+        self.mann = "${DIR.man}/mann"
         self.sysconf = "${DIR.prefix}/etc"
         self.sharedstate = "${DIR.prefix}/com" # most distros set it to /var/lib
         self.pkgsharedstate = "${DIR.sharedstate}/${NAME}" # not required by standard
@@ -87,7 +97,6 @@ class Base:
         """
         self.distribution = []
 
-        # Standard directory hierarchy
         self['DIR'] = DirectoryHierarchy()
 
         # Automatically include recognized files.
