@@ -35,6 +35,43 @@ import os.path
 # Set of file names that are automatically distributed.
 auto_dist = ("INSTALL", "NEWS", "README", "AUTHORS", "ChangeLog", "THANKS", "HACKING", "COPYING")
 
+class DirectoryHierarchy:
+    """Installation directory hierarchy.
+    """
+    def __init__(self, **kw):
+
+        # Standard hierarchy
+        self.prefix = "/usr/local"
+        self.dataroot = "${DIR.prefix}/share"
+        self.data = "${DIR.dataroot}"
+        self.pkgdata = "${DIR.data}/${NAME}" # not required by standard, Automake-specific
+        self.doc = "${DIR.dataroot}/doc/${NAME}"
+        self.html = dvi = ps = pdf = "${DIR.doc}"
+        self.info = "${DIR.dataroot}/info"
+        self.lisp = "${DIR.dataroot}/emacs/site-lisp"
+        self.locale = "${DIR.dataroot}/locale"
+        self.man = "${DIR.dataroot}/man"
+        self.manX = "${DIR.man}/manX" # X=1,...,9,l,n
+        self.sysconf = "${DIR.prefix}/etc"
+        self.sharedstate = "${DIR.prefix}/com" # most distros set it to /var/lib
+        self.pkgsharedstate = "${DIR.sharedstate}/${NAME}" # not required by standard
+        self.localstate = "${DIR.prefix}/var"
+        self.pkglocalstate = "${DIR.localstate}/${NAME}" # not required by standard
+        self.include = "${DIR.prefix}/include"
+        self.pkginclude = "${DIR.include}/${NAME}" # not required by standard, Automake-specific
+        self.exec_prefix = "${DIR.prefix}"
+        self.bin = "${DIR.exec_prefix}/bin"
+        self.sbin = "${DIR.exec_prefix}/sbin"
+        self.libexec = "${DIR.exec_prefix}/libexec"
+        self.pkglibexec = "${DIR.libexec}/${NAME}" # not required by standard
+        self.lib = "${DIR.exec_prefix}/lib"
+        self.pkglib = "${DIR.exec_prefix}/lib/${NAME}" # not required by standard, Automake-specific
+        self.oldinclude = "/usr/include"
+        self.pkgoldinclude = "${DIR.oldinclude}/${NAME}" # not required by standard
+
+        # Override from keyword arguments.
+        self.__dict__.update(kw)
+
 class Base:
     """Base class for Project objects
 
@@ -49,6 +86,9 @@ class Base:
         To be run after initializing SubstitutionEnvironment.
         """
         self.distribution = []
+
+        # Standard directory hierarchy
+        self['DIR'] = DirectoryHierarchy()
 
         # Automatically include recognized files.
         for filename in auto_dist:
