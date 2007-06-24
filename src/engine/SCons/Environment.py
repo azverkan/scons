@@ -721,7 +721,9 @@ class SubstitutionEnvironment:
 class Project(SubstitutionEnvironment, SCons.Project.Base):
     """Final class representing a Project.
     """
-    pass
+    def __init__(self, **kw):
+        SubstitutionEnvironment.__init__(self, **kw)
+        SCons.Project.Base.__init__(self)
 
 class Base(SubstitutionEnvironment):
     """Base class for "real" construction Environments.  These are the
@@ -1302,8 +1304,6 @@ class Base(SubstitutionEnvironment):
         self.scanner_map_delete(kw)
 
     def Project(self, name=None, version=None, author=None, *args, **kwargs):
-        print self, name, version, author, args, kwargs
-
         if name is None:
             raise "TODO/jph: Current project is not tracked yet"
         if version is None:

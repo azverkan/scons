@@ -30,7 +30,10 @@ concept to Automake compatibility.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-class TODO(Exception): pass
+import os.path
+
+# Set of file names that are automatically distributed.
+auto_dist = ("INSTALL", "NEWS", "README", "AUTHORS", "ChangeLog", "THANKS", "HACKING", "COPYING")
 
 class Base:
     """Base class for Project objects
@@ -40,8 +43,26 @@ class Base:
     avoid mutual import.
     """
 
-    def Distribute(self, *nodes):
-        print "Would distribute:", nodes
+    def __init__(self):
+        """Project-specific initialisation.
+
+        To be run after initializing SubstitutionEnvironment.
+        """
+        self.distribution = []
+
+        # Automatically include recognized files.
+        for filename in auto_dist:
+            if os.path.exists(filename):
+                self.distribution.extend(self.arg2nodes([filename]))
+
+    def finish(self):
+        print self['NAME'], 'would distribute:', ', '.join(str(a) for a in self.distribution)
+
+    def Distribute(self, *args):
+        nodes = []
+        for arg in args:
+            nodes.extend(self.arg2nodes(arg))
+        self.distribution.extend(nodes)
         return nodes
 
     def Build(self, *nodes):
