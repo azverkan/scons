@@ -46,6 +46,7 @@ import SCons.Builder
 from SCons.Debug import logInstanceCreation
 import SCons.Defaults
 import SCons.Errors
+import SCons.Header
 import SCons.Memoize
 import SCons.Node
 import SCons.Node.Alias
@@ -1593,6 +1594,13 @@ class Base(SubstitutionEnvironment):
             return result
         else:
             return result[0]
+
+    def Header(self, name, lang=None):
+        header_class = SCons.Header.CHeaderFile # TODO: use a map.
+        header = header_class()
+        tmp_builder = SCons.Builder.Builder(action=header.build_function)
+        tmp_builder(self, name)
+        return header
 
     def Ignore(self, target, dependency):
         """Ignore a dependency."""
