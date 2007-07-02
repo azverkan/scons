@@ -46,7 +46,6 @@ import SCons.Builder
 from SCons.Debug import logInstanceCreation
 import SCons.Defaults
 import SCons.Errors
-import SCons.Header
 import SCons.Memoize
 import SCons.Node
 import SCons.Node.Alias
