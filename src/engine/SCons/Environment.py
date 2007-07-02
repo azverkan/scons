@@ -46,6 +46,7 @@ import SCons.Builder
 from SCons.Debug import logInstanceCreation
 import SCons.Defaults
 import SCons.Errors
+import SCons.Header
 import SCons.Memoize
 import SCons.Node
 import SCons.Node.Alias
@@ -721,7 +722,8 @@ class SubstitutionEnvironment:
 class Project(SubstitutionEnvironment, SCons.Project.Base):
     """Final class representing a Project.
     """
-    def __init__(self, **kw):
+    def __init__(self, parent, **kw):
+        self._parent = parent
         SubstitutionEnvironment.__init__(self, **kw)
         SCons.Project.Base.__init__(self)
 
@@ -1303,14 +1305,6 @@ class Base(SubstitutionEnvironment):
                     self._dict[key] = val + dk
         self.scanner_map_delete(kw)
 
-    def Project(self, name=None, version=None, author=None, *args, **kwargs):
-        if name is None:
-            raise "TODO/jph: Current project is not tracked yet"
-        if version is None:
-            raise "TODO/jph: Finding project not supported yet"
-
-        return Project(NAME=name, VERSION=version, AUTHOR=author, *args, **kwargs)
-
     def Replace(self, **kw):
         """Replace existing construction variables in an Environment
         with new construction variables and/or values.
@@ -1675,6 +1669,15 @@ class Base(SubstitutionEnvironment):
         for t in tlist:
             t.set_precious()
         return tlist
+
+    def Project(self, name=None, version=None, author=None, *args, **kwargs):
+        """Return or look up Project object."""
+        if name is None:
+            raise "TODO/jph: Current project is not tracked yet"
+        if version is None:
+            raise "TODO/jph: Finding project not supported yet"
+
+        return Project(self, NAME=name, VERSION=version, AUTHOR=author, *args, **kwargs)
 
     def Repository(self, *dirs, **kw):
         dirs = self.arg2nodes(list(dirs), self.fs.Dir)
