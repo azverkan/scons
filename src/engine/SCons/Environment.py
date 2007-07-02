@@ -1595,9 +1595,9 @@ class Base(SubstitutionEnvironment):
         else:
             return result[0]
 
-    def Header(self, name, lang=None):
+    def Header(self, name, lang=None, **kwargs):
         header_class = SCons.Header.CHeaderFile # TODO: use a map.
-        header = header_class()
+        header = apply(header_class, (), kwargs)
         tmp_builder = SCons.Builder.Builder(action=header.build_function)
         tmp_builder(self, name)
         return header

@@ -31,6 +31,8 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import re
 import string
 import textwrap
+from types import *
+import UserDict
 
 import SCons.Errors
 import SCons.Util
@@ -41,11 +43,13 @@ def _final_text(text):
 
     raise Exception("TODO/jph: Non-string text not supported yet.")
 
-class HeaderFile:
-    def __init__(self):
+class HeaderFile(UserDict.UserDict):
+    def __init__(self, dict=None, **kwargs):
         self._top = []
         self._bottom = []
         self._maincontent = []
+        self._descriptions = {}
+        apply(UserDict.UserDict.__init__, (self, dict), kwargs)
 
     # Stub methods to be overloaded.
     def format_comment(self, lines):
@@ -71,6 +75,21 @@ class HeaderFile:
         """
         raise NotImplementedError
 
+    def format_string(self, string):
+        """Format string using target language syntax.
+        """
+        raise NotImplementedError
+
+    def format_integer(self, string):
+        """Format integer number using target language syntax.
+        """
+        raise NotImplementedError
+
+    def format_floating_point(self, string):
+        """Format floating point number using target language syntax.
+        """
+        raise NotImplementedError
+
     def check_comment_line(self, line):
         """Check comment line to see if it doesn't close comment.
         """
@@ -81,6 +100,42 @@ class HeaderFile:
         """
         raise NotImplementedError
 
+    # Internal methods
+    def __setitem__(self, name, value):
+        if not self.check_name(name):
+            raise SCons.Errors.UserError("Invalid identifier.")        
+        UserDict.UserDict.__setitem__(self, name, value)
+
+    def _kwdefs(self):
+        rv = []
+        for key in self.keys():
+            rv.append(self.Definition(key, self[key], self._descriptions.get(key), noinsert=True))
+        return rv
+
+    def _format_literal(self, value):
+        """Format `value' as valid literal.
+        """
+        if value is None:
+            raise SCons.Errors.InternalError("Cannot format literal for None value.")
+        
+        if SCons.Util.is_String(value):
+            return self.format_string(value)
+
+        t = type(value)
+        if t is IntType or t is LongType:
+            return self.format_integer(value)
+
+        if t is FloatType:
+            return self.format_float(value)
+
+        if callable(getattr(value, 'read', None)):
+            return self._format_literal(value.read())
+
+        if callable(value):
+            return self._format_literal(value())
+
+        # Last resort
+        return self.format_string(str(value))
 
     # Exported methods
     def Verbatim(self, text, position=None):
@@ -127,26 +182,43 @@ class HeaderFile:
             raise SCons.Errors.UserError("Invalid identifier.")
 
         text = "\n"
+
         if comment:
+            if not self.check_comment_line(comment):
+                raise SCons.Errors.UserError("Invalid comment.")
             text += self.Comment(comment, noinsert=True, nowrap=nowrap)
 
         if value is None:
             text += self.format_undefinition(name)
         else:
-            text += self.format_definition(name, value)
-
+            if verbatim:
+                text += self.format_definition(name, value)
+            else:
+                text += self.format_definition(name, self._format_literal(value))
+                
         text += "\n"
 
         if noinsert:
             return text
         else:
             return self.Verbatim(text)
-    
-    # Output
+
+    def Template(self, name, comment, value=None, nodef=False):
+        if not self.check_name(name):
+            raise SCons.Errors.UserError("Invalid identifier.")
+        if not self.check_comment_line(comment):
+            raise SCons.Errors.UserError("Invalid comment.")
+
+        self._descriptions[name] = comment
+
+        if not nodef and not self.has_key(name):
+            self[name] = value
+
+    # Output                                 
     def Text(self):
         """Return header final contents as string.
-        """
-        return string.join(self._top + self._maincontent + self._bottom, '\n')+'\n'
+        """            
+        return string.join(self._top + self._maincontent + self._kwdefs() + self._bottom, '\n')+'\n'
 
     def Write(self, file):
         """Write header contents to file.
@@ -188,6 +260,17 @@ class CHeaderFile(HeaderFile):
     def format_undefinition(self, name):
         return "/* #undef %s */" % name
 
-HeaderClassSelector = SCons.Util.Selector( {
-    '.c' : CHeaderFile,
-    } )
+    def format_string(self, str):
+        """Format string using target language syntax.
+        """
+        return '"' + string.replace(str, '"', '\\"') + '"'
+
+    def format_integer(self, number):
+        """Format integer number using target language syntax.
+        """
+        return str(number)
+
+    def format_floating_point(self, number):
+        """Format floating point number using target language syntax.
+        """
+        return repr(number)
