@@ -1596,10 +1596,20 @@ class Base(SubstitutionEnvironment):
             return result[0]
 
     def Header(self, name, lang=None, **kwargs):
+        node = self.arg2nodes(name)[0]
+        try:
+            header = node.attributes.header
+            if lang:
+                raise SCons.Errors.UserError(
+                    "%s is already defined header, can't change its language" % node)
+            return header
+        except AttributeError: pass
+
         header_class = SCons.Header.CHeaderFile # TODO: use a map.
         header = apply(header_class, (), kwargs)
         tmp_builder = SCons.Builder.Builder(action=header.Action())
-        tmp_builder(self, name)
+        node = tmp_builder(self, name)
+        node[0].attributes.header = header
         return header
 
     def Ignore(self, target, dependency):
