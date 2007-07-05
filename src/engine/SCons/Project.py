@@ -157,8 +157,8 @@ class Base:
         self.distribution.extend(nodes)
         return nodes
 
-    def Build(self, *nodes):
-        print "Would build:", nodes
+    def Attach(self, *nodes):
+        print "Attached:", nodes
         self.distribution_roots.extend(nodes)
         return nodes
 
