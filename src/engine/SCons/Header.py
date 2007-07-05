@@ -34,6 +34,7 @@ import textwrap
 from types import *
 import UserDict
 
+import SCons.Action
 import SCons.Errors
 import SCons.Util
 
@@ -236,8 +237,16 @@ class HeaderFile(UserDict.UserDict):
         if needs_closing:
             file.close()
 
-    def build_function(self, target, source, env):
-        self.Write(str(target[0]))
+    def Action(self):
+        """Return Action object to build this header.
+        """
+        def build_header(target, source, env):
+            self.Write(str(target[0]))
+        return SCons.Action.Action(build_header, varlist=[repr(self._top),
+                                                          repr(self._maincontent),
+                                                          repr(self._bottom),
+                                                          repr(self.data),
+                                                          repr(self._descriptions)])
 
 class CHeaderFile(HeaderFile):
     """Header file generator for C language

@@ -723,7 +723,7 @@ class Project(SubstitutionEnvironment, SCons.Project.Base):
     """Final class representing a Project.
     """
     def __init__(self, parent, **kw):
-        self._parent = parent
+        self.env = parent
         SubstitutionEnvironment.__init__(self, **kw)
         SCons.Project.Base.__init__(self)
 
@@ -1598,7 +1598,7 @@ class Base(SubstitutionEnvironment):
     def Header(self, name, lang=None, **kwargs):
         header_class = SCons.Header.CHeaderFile # TODO: use a map.
         header = apply(header_class, (), kwargs)
-        tmp_builder = SCons.Builder.Builder(action=header.build_function)
+        tmp_builder = SCons.Builder.Builder(action=header.Action())
         tmp_builder(self, name)
         return header
 
