@@ -145,9 +145,18 @@ class Base:
             if os.path.exists(filename):
                 self.distribution.extend(self.arg2nodes([filename]))
 
+        def my_alias(alias): return '%s-%s' % (alias, self['NAME'])
+        for alias in ('all', 'dist', 'check', 'distcheck',
+                      'install-data', 'install-exec', 'install-init'):
+            self.env.Alias(my_alias(alias))
+            self.env.Alias(alias, my_alias(alias))
+
     def finish(self):
         for node in self.distribution_roots:
             self.distribution.extend(FindSourceFiles(self.env, node))
+        tar = self.env.Tar('%s-%s.tar.gz' % (self['NAME'], self['VERSION']),
+                           self.distribution, TARFLAGS='-c -z')
+        self.env.Alias('dist-'+self['NAME'], tar)
         print self['NAME'], 'would distribute:', ', '.join(str(a) for a in self.distribution)
 
     def Distribute(self, *args):
@@ -167,7 +176,33 @@ class Base:
         self.distribution_roots.extend(nodes)
         return nodes
 
+    __default_autoinstall_keywords = dict(executable = False,
+                                          arch_dependent = False,
+                                          machine_specific = False,
+                                          writable = False)
+    def __autoinstall_node(self, node, **kwargs):
+        print 'AutoInstalling:', node, kwargs,
+        
+        kw = self.__default_autoinstall_keywords.copy()
+        kw.update(self.env.get('autoinstall_keywords', {}))
+        kw.update(self.get('autoinstall_keywords', {}))
+        kw.update(getattr(node.attributes, 'autoinstall_keywords', {}))
+        kw.update(node.env.get('autoinstall_keywords', {}))
+        kw.update(kwargs)
+
+        print '->', kw
+
+
     def AutoInstall(self, *nodes, **kwargs):
-        print "Would autoinstall:", [str(node) for node in nodes], kwargs
-        self.distribution_roots.extend(nodes)
-        return nodes
+        returned_nodes = []
+        for node in nodes:
+            if SCons.Util.is_List(node):
+                returned_nodes.extend(
+                    apply(self.AutoInstall, node, kwargs))
+            else:
+                returned_nodes.append(
+                    apply(self.__autoinstall_node, (node,), kwargs))
+
+        self.env.Alias('all-'+self['NAME'], returned_nodes)
+        self.distribution_roots.extend(returned_nodes)
+        return returned_nodes
