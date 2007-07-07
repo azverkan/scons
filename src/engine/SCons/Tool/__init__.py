@@ -176,7 +176,11 @@ def createProgBuilder(env):
                                         suffix = '$PROGSUFFIX',
                                         src_suffix = '$OBJSUFFIX',
                                         src_builder = 'Object',
-                                        target_scanner = ProgramScanner)
+                                        target_scanner = ProgramScanner,
+                                        autoinstall_keywords = {'install'        : 'bin',
+                                                                'executable'     : True,
+                                                                'arch_dependent' : True,
+                                                                })
         env['BUILDERS']['Program'] = program
 
     return program
