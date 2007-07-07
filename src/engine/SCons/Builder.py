@@ -367,6 +367,7 @@ class BuilderBase:
                         chdir = _null,
                         is_explicit = 1,
                         src_builder = [],
+                        autoinstall_keywords = {},
                         **overrides):
         if __debug__: logInstanceCreation(self, 'Builder.BuilderBase')
         self._memo = {}
@@ -399,6 +400,7 @@ class BuilderBase:
         self.source_factory = source_factory
         self.target_scanner = target_scanner
         self.source_scanner = source_scanner
+        self.autoinstall_keywords = autoinstall_keywords
 
         self.emitter = emitter
 
@@ -573,6 +575,10 @@ class BuilderBase:
             get_executor = self.get_single_executor
         executor = get_executor(env, tlist, slist, executor_kw)
 
+        # Figure out AutoInstall default arguments to mark target Nodes with.
+        autoinstall_keywords = self.autoinstall_keywords.copy()
+        autoinstall_keywords.update(env.get('autoinstall_keywords',{}))
+
         # Now set up the relevant information in the target Nodes themselves.
         for t in tlist:
             t.cwd = env.fs.getcwd()
@@ -581,6 +587,7 @@ class BuilderBase:
             t.add_source(slist)
             t.set_executor(executor)
             t.set_explicit(self.is_explicit)
+            t.attributes.autoinstall_keywords = autoinstall_keywords
 
         return SCons.Node.NodeList(tlist)
 

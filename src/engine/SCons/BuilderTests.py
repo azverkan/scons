@@ -156,12 +156,14 @@ class MyAction:
         return ['executor'] + [self.action]
 
 class MyNode_without_target_from_source:
+    class Attrs: pass
     def __init__(self, name):
         self.name = name
         self.sources = []
         self.builder = None
         self.is_explicit = None
         self.side_effect = 0
+        self.attributes = self.Attrs()
     def disambiguate(self):
         return self
     def __str__(self):
