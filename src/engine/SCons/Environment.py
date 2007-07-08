@@ -1602,6 +1602,8 @@ class Base(SubstitutionEnvironment):
             if lang:
                 raise SCons.Errors.UserError(
                     "%s is already defined header, can't change its language" % node)
+            if dict: header.update(dict)
+            header.update(kwargs)
             return header
         except AttributeError: pass
 
