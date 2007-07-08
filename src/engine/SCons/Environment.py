@@ -1689,14 +1689,14 @@ class Base(SubstitutionEnvironment):
             t.set_precious()
         return tlist
 
-    def Project(self, name=None, version=None, author=None, *args, **kwargs):
+    def Project(self, name=None, version=None, bugreport=None, *args, **kwargs):
         """Return or look up Project object."""
         if name is None:
             raise "TODO/jph: Current project is not tracked yet"
         if version is None:
             raise "TODO/jph: Finding project not supported yet"
 
-        return Project(self, NAME=name, VERSION=version, AUTHOR=author, *args, **kwargs)
+        return Project(self, NAME=name, VERSION=version, BUGREPORT=bugreport, *args, **kwargs)
 
     def Repository(self, *dirs, **kw):
         dirs = self.arg2nodes(list(dirs), self.fs.Dir)
