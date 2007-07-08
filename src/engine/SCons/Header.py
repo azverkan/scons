@@ -45,12 +45,18 @@ def _final_text(text):
     raise Exception("TODO/jph: Non-string text not supported yet.")
 
 class HeaderFile(UserDict.UserDict):
+    language = None
+
     def __init__(self, dict=None, **kwargs):
         self._top = []
         self._bottom = []
         self._maincontent = []
         self._descriptions = {}
         apply(UserDict.UserDict.__init__, (self, dict), kwargs)
+        self.node = None
+
+    def set_node(self, node):
+        self.node = node
 
     # Stub methods to be overloaded.
     def format_comment(self, lines):
@@ -251,6 +257,7 @@ class HeaderFile(UserDict.UserDict):
 class CHeaderFile(HeaderFile):
     """Header file generator for C language
     """
+    language = 'C'
     close_comment_re = re.compile("\\*/")
     name_re = re.compile("^[_A-Za-z][_A-Za-z0-9]*$")
 

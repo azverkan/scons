@@ -1612,6 +1612,7 @@ class Base(SubstitutionEnvironment):
         tmp_builder = SCons.Builder.Builder(action=header.Action())
         node = tmp_builder(self, name)
         node[0].attributes.header = header
+        header.set_node(node[0])
         return header
 
     def Ignore(self, target, dependency):
