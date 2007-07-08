@@ -1595,7 +1595,7 @@ class Base(SubstitutionEnvironment):
         else:
             return result[0]
 
-    def Header(self, name, lang=None, **kwargs):
+    def Header(self, name, lang=None, dict=None, **kwargs):
         node = self.arg2nodes(name)[0]
         try:
             header = node.attributes.header
@@ -1606,7 +1606,7 @@ class Base(SubstitutionEnvironment):
         except AttributeError: pass
 
         header_class = SCons.Header.CHeaderFile # TODO: use a map.
-        header = apply(header_class, (), kwargs)
+        header = apply(header_class, (dict,), kwargs)
         tmp_builder = SCons.Builder.Builder(action=header.Action())
         node = tmp_builder(self, name)
         node[0].attributes.header = header
