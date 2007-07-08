@@ -139,6 +139,14 @@ class Base:
         self.distribution_roots = []
 
         self['DIR'] = DirectoryHierarchy()
+        if not self.has_key('shortname'):
+            self['shortname'] = self['NAME']
+
+        if self.has_key('header'):
+            if SCons.Util.is_Sequence(self['header']):
+                apply(self.Header, self['header'])
+            else:
+                self.Header(self['header'])
 
         # Automatically include recognized files.
         for filename in auto_dist:
@@ -151,6 +159,27 @@ class Base:
             self.env.Alias(my_alias(alias))
             self.env.Alias(alias, my_alias(alias))
 
+    # Wrappers
+    def Header(self, header=None, lang=None):
+        if header is None:
+            return self['header']
+        if not isinstance(header, SCons.Header.HeaderFile):
+            header = self.env.Header(header, lang)
+        self['header'] = header
+
+        # Default header contents
+        header.Template('PACKAGE', 'Name of package', self['NAME'])
+        header.Template('VERSION', 'Version number of package', self['VERSION'])
+        header.Template('PACKAGE_NAME', 'Define to the full name of this package.', self['NAME'])
+        header.Template('PACKAGE_TARNAME', 'Define to one symbol short name of this package.  (Automake compatibility definition)', self.get('shortname'))
+        header.Template('PACKAGE_SHORT_NAME', 'Define to one symbol short name of this package.', self.get('shortname'))
+        header.Template('PACKAGE_VERSION', 'Define to the version of this package.', self['VERSION'])
+        header.Template('PACKAGE_STRING', 'Define to the full name and version of this package.', '%s %s' % (self['NAME'], self['VERSION']))
+
+        if header.language == 'C':
+            self.env.Append(CPPPATH=header.node.get_dir())
+
+    # Internal API
     def finish(self):
         for node in self.distribution_roots:
             self.distribution.extend(FindSourceFiles(self.env, node))
@@ -159,6 +188,7 @@ class Base:
         self.env.Alias('dist-'+self['NAME'], tar)
         print self['NAME'], 'would distribute:', ', '.join(str(a) for a in self.distribution)
 
+    # Entry points
     def Distribute(self, *args):
         nodes = []
         for arg in args:
