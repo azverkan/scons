@@ -62,6 +62,7 @@ import SCons.Job
 import SCons.Node
 import SCons.Node.FS
 from SCons.Optik import OptionParser, SUPPRESS_HELP, OptionValueError
+import SCons.Project
 import SCons.SConf
 import SCons.Script
 import SCons.Sig
@@ -1204,6 +1205,7 @@ def _main(args, parser):
     try:
         for script in scripts:
             SCons.Script._SConscript._SConscript(fs, script)
+        SCons.Project.finish_all()
     except SCons.Errors.StopError, e:
         # We had problems reading an SConscript file, such as it
         # couldn't be copied in to the BuildDir.  Since we're just

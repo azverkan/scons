@@ -122,6 +122,11 @@ class DirectoryHierarchy:
         # Override from keyword arguments.
         self.__dict__.update(kw)
 
+_all_projects = []
+def finish_all():
+    for proj in _all_projects:
+        proj.finish()
+
 class Base:
     """Base class for Project objects
 
@@ -135,6 +140,9 @@ class Base:
 
         To be run after initializing SubstitutionEnvironment.
         """
+        _all_projects.append(self)
+        self.finished = False
+
         self.distribution = []
         self.distribution_roots = []
 
@@ -181,12 +189,17 @@ class Base:
 
     # Internal API
     def finish(self):
+        if self.finished: return
+
         for node in self.distribution_roots:
             self.distribution.extend(FindSourceFiles(self.env, node))
+
         tar = self.env.Tar('%s-%s.tar.gz' % (self['NAME'], self['VERSION']),
                            self.distribution, TARFLAGS='-c -z')
         self.env.Alias('dist-'+self['NAME'], tar)
         print self['NAME'], 'would distribute:', ', '.join(str(a) for a in self.distribution)
+
+        self.finished = True
 
     # Entry points
     def Distribute(self, *args):
