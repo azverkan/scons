@@ -119,8 +119,18 @@ class DirectoryHierarchy:
         self.oldinclude = "/usr/include"
         self.pkgoldinclude = "${DIR.oldinclude}/${NAME}" # not required by standard
 
+        self.__arch_dependent = ['exec_prefix', 'bin', 'sbin', 'libexec', 'pkglibexec', 'lib', 'pkglib']
+
         # Override from keyword arguments.
         self.__dict__.update(kw)
+
+    def is_arch_dependent(self, name):
+        return name in self.__arch_dependent
+
+    def defineDirectory(self, name, directory, arch_dependent=False):
+        self.setattr(name, directory)
+        if arch_dependent:
+            self.__arch_dependent.append(name)
 
 _all_projects = []
 def finish_all():
@@ -166,6 +176,14 @@ class Base:
                       'install-data', 'install-exec', 'install-init'):
             self.env.Alias(my_alias(alias))
             self.env.Alias(alias, my_alias(alias))
+
+        self.env.Alias('install','install-data')
+        self.env.Alias('install','install-exec')
+        self.env.Alias('install','install-init') # FIXME
+
+        self.env.Alias(my_alias('install'), my_alias('install-data'))
+        self.env.Alias(my_alias('install'), my_alias('install-exec'))
+        self.env.Alias(my_alias('install'), my_alias('install-init')) # FIXME
 
     # Wrappers
     def Header(self, header=None, lang=None):
@@ -224,8 +242,6 @@ class Base:
                                           machine_specific = False,
                                           writable = False)
     def __autoinstall_node(self, node, **kwargs):
-        print 'AutoInstalling:', node, kwargs,
-        
         kw = self.__default_autoinstall_keywords.copy()
         kw.update(self.env.get('autoinstall_keywords', {}))
         kw.update(self.get('autoinstall_keywords', {}))
@@ -233,8 +249,30 @@ class Base:
         kw.update(node.env.get('autoinstall_keywords', {}))
         kw.update(kwargs)
 
-        print '->', kw
+        try: install = kw['install']
+        except KeyError:
+            if kw.get('writable'):
+                if kw.get('machine_specific') or kw.get('arch_dependent'):
+                    install = 'pkglocalstate'
+                else:
+                    install = 'pkgsharedstate'
+            elif kw.get('machine_specific'):
+                install = 'sysconf'
+            elif kw.get('arch_dependent'):
+                install = 'pkglib'
+            else:
+                install = 'pkgdata'
 
+        tdir = self.subst(install)
+        arch_dependent = kw.get('arch_dependent', self['DIR'].is_arch_dependent(tdir))
+        if not os.path.isabs(tdir):
+            tdir = self.subst(getattr(self['DIR'], tdir))
+
+        t = self.env.Install(tdir, node)
+        if arch_dependent:
+            self.env.Alias('install-exec-'+self['NAME'], t)
+        else:
+            self.env.Alias('install-data-'+self['NAME'], t)
 
     def AutoInstall(self, *nodes, **kwargs):
         returned_nodes = []
