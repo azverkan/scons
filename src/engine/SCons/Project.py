@@ -201,6 +201,7 @@ class Base:
         header.Template('PACKAGE_SHORT_NAME', 'Define to one symbol short name of this package.', self.get('shortname'))
         header.Template('PACKAGE_VERSION', 'Define to the version of this package.', self['VERSION'])
         header.Template('PACKAGE_STRING', 'Define to the full name and version of this package.', '%s %s' % (self['NAME'], self['VERSION']))
+        header.Template('PACKAGE_BUGREPORT', 'Define to the address where bug reports for this package should be sent.', self.get('BUGREPORT'))
 
         if header.language == 'C':
             self.env.Append(CPPPATH=header.node.get_dir())
