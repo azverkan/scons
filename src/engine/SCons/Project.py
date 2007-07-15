@@ -133,9 +133,9 @@ class DirectoryHierarchy:
             self.__arch_dependent.append(name)
 
 _all_projects = []
-def finish_all():
+def finish_all(sconscripts=()):
     for proj in _all_projects:
-        proj.finish()
+        proj.finish(sconscripts=sconscripts)
 
 class Base:
     """Base class for Project objects
@@ -207,9 +207,10 @@ class Base:
             self.env.Append(CPPPATH=header.node.get_dir())
 
     # Internal API
-    def finish(self):
+    def finish(self, sconscripts=()):
         if self.finished: return
 
+        apply(self.Distribute, sconscripts)
         for node in self.distribution_roots:
             self.distribution.extend(FindSourceFiles(self.env, node))
 
@@ -274,15 +275,13 @@ class Base:
         else:
             self.env.Alias('install-data-'+self['NAME'], t)
 
+        return node
+
     def AutoInstall(self, *nodes, **kwargs):
         returned_nodes = []
-        for node in nodes:
-            if SCons.Util.is_List(node):
-                returned_nodes.extend(
-                    apply(self.AutoInstall, node, kwargs))
-            else:
-                returned_nodes.append(
-                    apply(self.__autoinstall_node, (node,), kwargs))
+        for node in SCons.Util.flatten(nodes):
+            returned_nodes.append(
+                apply(self.__autoinstall_node, (node,), kwargs))
 
         self.env.Alias('all-'+self['NAME'], returned_nodes)
         self.distribution_roots.extend(returned_nodes)
