@@ -128,6 +128,16 @@ class Frame:
         else:
             self.sconscript = fs.File(str(sconscript))
 
+# history of visited SConstruct/SConscript files
+history = []
+
+def clean_history():
+    global history
+    history = []
+
+def get_history():
+    return tuple(history)
+
 # the SConstruct/SConscript call stack:
 call_stack = []
 
@@ -170,13 +180,14 @@ def _SConscript(fs, *files, **kw):
                 else:
                     f = fs.File(str(fn))
                 _file_ = None
+                _filename_ = None
 
                 # Change directory to the top of the source
                 # tree to make sure the os's cwd and the cwd of
                 # fs match so we can open the SConscript.
                 fs.chdir(top, change_os_dir=1)
                 if f.rexists():
-                    _file_ = open(f.rfile().get_abspath(), "r")
+                    _filename_ = f.rfile().get_abspath()
                 elif f.has_src_builder():
                     # The SConscript file apparently exists in a source
                     # code management system.  Build it, but then clear
@@ -186,7 +197,11 @@ def _SConscript(fs, *files, **kw):
                     f.built()
                     f.builder_set(None)
                     if f.exists():
-                        _file_ = open(f.get_abspath(), "r")
+                        _filename_ = f.get_abspath()
+
+                if _filename_:
+                    _file_ = open(_filename_, "r")
+
                 if _file_:
                     # Chdir to the SConscript directory.  Use a path
                     # name relative to the SConstruct file so that if
@@ -246,6 +261,7 @@ def _SConscript(fs, *files, **kw):
                     finally:
                         if old_file is not None:
                             call_stack[-1].globals.update({__file__:old_file})
+                    history.append(_filename_)
                 else:
                     SCons.Warnings.warn(SCons.Warnings.MissingSConscriptWarning,
                              "Ignoring missing SConscript '%s'" % f.path)

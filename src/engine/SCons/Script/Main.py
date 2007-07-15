@@ -815,9 +815,10 @@ def _main(parser):
 
     start_time = time.time()
     try:
+        SCons.Script._SConscript.clean_history()
         for script in scripts:
             SCons.Script._SConscript._SConscript(fs, script)
-        SCons.Project.finish_all()
+        SCons.Project.finish_all(SCons.Script._SConscript.get_history())
     except SCons.Errors.StopError, e:
         # We had problems reading an SConscript file, such as it
         # couldn't be copied in to the BuildDir.  Since we're just
