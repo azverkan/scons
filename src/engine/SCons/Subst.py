@@ -393,6 +393,8 @@ def scons_subst(strSubst, env, mode=SUBST_RAW, target=None, source=None, gvars={
                     if key[0] == '{' or string.find(key, '.') >= 0:
                         if key[0] == '{':
                             key = key[1:-1]
+                        if lvars.has_key(key):
+                            return ''
                         try:
                             s = eval(key, self.gvars, lvars)
                         except KeyboardInterrupt:
@@ -424,8 +426,7 @@ def scons_subst(strSubst, env, mode=SUBST_RAW, target=None, source=None, gvars={
                     # are probably more the exception than the norm,
                     # so it should be tolerable for now.
                     lv = lvars.copy()
-                    var = string.split(key, '.')[0]
-                    lv[var] = ''
+                    lv[key] = ''
                     return self.substitute(s, lv)
             elif is_List(s) or is_Tuple(s):
                 def func(l, conv=self.conv, substitute=self.substitute, lvars=lvars):
@@ -606,6 +607,8 @@ def scons_subst_list(strSubst, env, mode=SUBST_RAW, target=None, source=None, gv
                     if key[0] == '{' or string.find(key, '.') >= 0:
                         if key[0] == '{':
                             key = key[1:-1]
+                        if lvars.has_key(key):
+                            return ''
                         try:
                             s = eval(key, self.gvars, lvars)
                         except KeyboardInterrupt:
@@ -630,8 +633,7 @@ def scons_subst_list(strSubst, env, mode=SUBST_RAW, target=None, source=None, gv
                     # string for the value of the variable name
                     # we just expanded.
                     lv = lvars.copy()
-                    var = string.split(key, '.')[0]
-                    lv[var] = ''
+                    lv[key] = ''
                     self.substitute(s, lv, 0)
                     self.this_word()
             elif is_List(s) or is_Tuple(s):

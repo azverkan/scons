@@ -135,6 +135,9 @@ class SubstTestCase(unittest.TestCase):
             def __str__(self):
                 return self.value
 
+        class TestAttributes:
+            pass
+
         def function_foo(arg):
             pass
 
@@ -146,6 +149,15 @@ class SubstTestCase(unittest.TestCase):
                    MyNode("../foo/ack.c") ]
 
         callable_object = TestCallable('callable-1')
+
+        attr = TestAttributes()
+        attr.first = '${ATTR.third} with braces'
+        attr.second = '$ATTR.third without braces'
+        attr.third = 'x${ATTR.fourth}y'
+        attr.fourth = 'yzz'
+        attr.recurse = '${ATTR.rthird} with recursion'
+        attr.rthird = 'x${ATTR.rfourth}y'
+        attr.rfourth = 'yz${ATTR.rthird}z'
 
         loc = {
             'xxx'       : None,
@@ -206,6 +218,9 @@ class SubstTestCase(unittest.TestCase):
 
             # Test callables that don't match the calling arguments.
             'CALLABLE'  : callable_object,
+
+            # Test recursion to attributes of the same object
+            'ATTR'      : attr,
         }
 
         env = DummyEnv(loc)
@@ -328,6 +343,11 @@ class SubstTestCase(unittest.TestCase):
 
             # Test handling of quotes.
             'aaa "bbb ccc" ddd',    'aaa "bbb ccc" ddd',
+
+            # Test recursion to attributes of the same object
+            "${ATTR.first}", "xyzzy with braces",
+            "$ATTR.second", "xyzzy without braces",
+            "${ATTR.recurse}", "xyzzy with recursion",
         ]
 
         kwargs = {'target' : target, 'source' : source,
@@ -599,6 +619,9 @@ class SubstTestCase(unittest.TestCase):
             def __str__(self):
                 return self.value
 
+        class TestAttributes:
+            pass
+
         target = [ MyNode("./foo/bar.exe"),
                    MyNode("/bar/baz with spaces.obj"),
                    MyNode("../foo/baz.obj") ]
@@ -607,6 +630,15 @@ class SubstTestCase(unittest.TestCase):
                    MyNode("../foo/ack.c") ]
 
         callable_object = TestCallable('callable-2')
+
+        attr = TestAttributes()
+        attr.first = '${ATTR.third} with-braces'
+        attr.second = '$ATTR.third without-braces'
+        attr.third = 'x${ATTR.fourth}y'
+        attr.fourth = 'yzz'
+        attr.recurse = '${ATTR.rthird} with-recursion'
+        attr.rthird = 'x${ATTR.rfourth}y'
+        attr.rfourth = 'yz${ATTR.rthird}z'
 
         def _defines(defs):
             l = []
@@ -671,6 +703,9 @@ class SubstTestCase(unittest.TestCase):
 
             '_defines'  : _defines,
             'DEFS'      : [ ('Q1', '"q1"'), ('Q2', '"$AAA"') ],
+
+            # Test recursion to attributes of the same object
+            'ATTR'      : attr,
         }
 
         env = DummyEnv(loc)
@@ -811,6 +846,11 @@ class SubstTestCase(unittest.TestCase):
             #'aaa "bbb ccc" ddd',    [['aaa', 'bbb ccc', 'ddd']],
 
             '${_defines(DEFS)}',     [['Q1="q1"', 'Q2="a"']],
+
+            # Test recursion to attributes of the same object
+            "${ATTR.first}", [["xyzzy", "with-braces"]],
+            "$ATTR.second", [["xyzzy", "without-braces"]],
+            "${ATTR.recurse}", [["xyzzy", "with-recursion"]],
         ]
 
         gvars = env.Dictionary()
