@@ -216,7 +216,6 @@ class Base:
         tar = self.env.Tar('%s-%s.tar.gz' % (self['NAME'], self['VERSION']),
                            self.distribution, TARFLAGS='-c -z')
         self.env.Alias('dist-'+self['NAME'], tar)
-        print self['NAME'], 'would distribute:', ', '.join(str(a) for a in self.distribution)
 
         self.finished = True
 
