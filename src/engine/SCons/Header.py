@@ -133,7 +133,7 @@ class HeaderFile(UserDict.UserDict):
             return self.format_integer(value)
 
         if t is FloatType:
-            return self.format_float(value)
+            return self.format_floating_point(value)
 
         if callable(getattr(value, 'read', None)):
             return self._format_literal(value.read())
@@ -167,6 +167,7 @@ class HeaderFile(UserDict.UserDict):
         return text
 
     def Comment(self, text, position=None, noinsert = False, nowrap=False):
+        text = string.strip(text)
         if nowrap:
             text = string.split(text, "\n")
         else:
