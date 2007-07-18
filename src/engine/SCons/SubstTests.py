@@ -486,6 +486,7 @@ class SubstTestCase(unittest.TestCase):
             expect = [
                 "AttributeError `bar' trying to evaluate `${foo.bar}'",
                 "AttributeError `Foo instance has no attribute 'bar'' trying to evaluate `${foo.bar}'",
+                "AttributeError `'Foo' instance has no attribute 'bar'' trying to evaluate `${foo.bar}'",
             ]
             assert str(e) in expect, e
         else:
@@ -575,6 +576,12 @@ class SubstTestCase(unittest.TestCase):
         result = scons_subst('$XXX', env, gvars=env.Dictionary())
         assert result == 'xxx', result
         result = scons_subst('$XXX', env, gvars={'XXX' : 'yyy'})
+        assert result == 'yyy', result
+
+        # Test supplying lvars.
+        result = scons_subst('$XXX', env, lvars={'XXX':'yyy'})
+        assert result == 'yyy', result
+        result = scons_subst('${XXX}', env, lvars={'XXX':'yyy'})
         assert result == 'yyy', result
 
     def test_CLVar(self):

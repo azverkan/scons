@@ -394,15 +394,16 @@ def scons_subst(strSubst, env, mode=SUBST_RAW, target=None, source=None, gvars={
                         if key[0] == '{':
                             key = key[1:-1]
                         if lvars.has_key(key):
-                            return ''
-                        try:
-                            s = eval(key, self.gvars, lvars)
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception, e:
-                            if e.__class__ in AllowableExceptions:
-                                return ''
-                            raise_exception(e, self.target, s)
+                            s = lvars[key]
+                        else:
+                            try:
+                                s = eval(key, self.gvars, lvars)
+                            except KeyboardInterrupt:
+                                raise
+                            except Exception, e:
+                                if e.__class__ in AllowableExceptions:
+                                    return ''
+                                raise_exception(e, self.target, s)
                     else:
                         if lvars.has_key(key):
                             s = lvars[key]
@@ -608,15 +609,16 @@ def scons_subst_list(strSubst, env, mode=SUBST_RAW, target=None, source=None, gv
                         if key[0] == '{':
                             key = key[1:-1]
                         if lvars.has_key(key):
-                            return ''
-                        try:
-                            s = eval(key, self.gvars, lvars)
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception, e:
-                            if e.__class__ in AllowableExceptions:
-                                return
-                            raise_exception(e, self.target, s)
+                            s = lvars[key]
+                        else:
+                            try:
+                                s = eval(key, self.gvars, lvars)
+                            except KeyboardInterrupt:
+                                raise
+                            except Exception, e:
+                                if e.__class__ in AllowableExceptions:
+                                    return
+                                raise_exception(e, self.target, s)
                     else:
                         if lvars.has_key(key):
                             s = lvars[key]
