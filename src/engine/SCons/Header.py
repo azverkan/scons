@@ -42,7 +42,7 @@ def _final_text(text):
     if SCons.Util.is_String(text):
         return text
 
-    raise Exception("TODO/jph: Non-string text not supported yet.")
+    raise SCons.Errors.UserError("TODO/jph: Non-string text not supported yet.")
 
 class HeaderFile(UserDict.UserDict):
     language = None
