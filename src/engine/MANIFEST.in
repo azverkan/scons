@@ -17,6 +17,7 @@ SCons/Defaults.py
 SCons/Environment.py
 SCons/Errors.py
 SCons/Executor.py
+SCons/Header.py
 SCons/Job.py
 SCons/exitfuncs.py
 SCons/Memoize.py
@@ -41,6 +42,7 @@ SCons/Platform/os2.py
 SCons/Platform/posix.py
 SCons/Platform/sunos.py
 SCons/Platform/win32.py
+SCons/Project.py
 SCons/Scanner/__init__.py
 SCons/Scanner/C.py
 SCons/Scanner/D.py
