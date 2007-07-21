@@ -33,47 +33,10 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import os.path
 
 import SCons.Node.FS
+import SCons.Tool.packaging
 
 # Set of file names that are automatically distributed.
 auto_dist = ("INSTALL", "NEWS", "README", "AUTHORS", "ChangeLog", "THANKS", "HACKING", "COPYING")
-
-# Pasted from Philip Scholl's packaging extension, until it is merged
-def FindSourceFiles(env, target=None, source=None ):
-    """ returns a list of all children of the target nodes, which have no
-    children. This selects all leaves of the DAG that gets build by SCons for
-    handling dependencies.
-    """
-    if target==None: target = '.'
-
-    nodes = env.arg2nodes(target, env.fs.Entry)
-
-    sources = []
-    def build_source(ss):
-        for s in ss:
-            if s.__class__==SCons.Node.FS.Dir:
-                build_source(s.all_children())
-            elif not s.has_builder() and s.__class__==SCons.Node.FS.File:
-                sources.append(s)
-            else:
-                build_source(s.sources)
-
-    for node in nodes:
-        build_source(node.all_children())
-
-    # now strip the build_node from the sources by calling the srcnode
-    # function
-    def get_final_srcnode(file):
-        srcnode = file.srcnode()
-        while srcnode != file.srcnode():
-            srcnode = file.srcnode()
-        return srcnode
-
-    # get the final srcnode for all nodes, this means stripping any
-    # attached build node.
-    map( get_final_srcnode, sources )
-
-    # remove duplicates
-    return list(set(sources))
 
 class DirectoryHierarchy:
     """Installation directory hierarchy.
@@ -212,7 +175,7 @@ class Base:
 
         apply(self.Distribute, sconscripts)
         for node in self.distribution_roots:
-            self.distribution.extend(FindSourceFiles(self.env, node))
+            self.distribution.extend(self.env.FindSourceFiles(node))
 
         tar = self.env.Tar('%s-%s.tar.gz' % (self['NAME'], self['VERSION']),
                            self.distribution, TARFLAGS='-c -z')
