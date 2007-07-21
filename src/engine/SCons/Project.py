@@ -134,8 +134,9 @@ class Base:
 
         # Automatically include recognized files.
         for filename in auto_dist:
-            if os.path.exists(filename):
-                self.distribution.extend(self.arg2nodes([filename]))
+            f = self.env.File(filename)
+            if f.rexists():
+                self.distribution.append(f)
 
         def my_alias(alias): return '%s-%s' % (alias, self['NAME'])
         for alias in ('all', 'dist', 'check', 'distcheck',
