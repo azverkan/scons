@@ -113,6 +113,9 @@ class Base:
 
         To be run after initializing SubstitutionEnvironment.
         """
+        if not 'packaging' in self.env['TOOLS']:
+            self.env.Tool('packaging')
+
         _all_projects.append(self)
         self.finished = False
 
@@ -177,9 +180,11 @@ class Base:
         for node in self.distribution_roots:
             self.distribution.extend(self.env.FindSourceFiles(node))
 
-        tar = self.env.Tar('%s-%s.tar.gz' % (self['NAME'], self['VERSION']),
-                           self.distribution, TARFLAGS='-c -z')
-        self.env.Alias('dist-'+self['NAME'], tar)
+        pkg_kw = dict(self.items())
+        pkg_kw['PACKATE_TYPE'] = 'targz'
+        
+        package = apply(self.env.Package, (self.distribution,), pkg_kw)
+        self.env.Alias('dist-'+self['NAME'], package)
 
         self.finished = True
 
