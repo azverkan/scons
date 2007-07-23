@@ -85,6 +85,7 @@ SCons/Tool/dvips.py
 SCons/Tool/f77.py
 SCons/Tool/f90.py
 SCons/Tool/f95.py
+SCons/Tool/filesystem.py
 SCons/Tool/fortran.py
 SCons/Tool/g++.py
 SCons/Tool/g77.py
@@ -95,6 +96,7 @@ SCons/Tool/gs.py
 SCons/Tool/hpc++.py
 SCons/Tool/hpcc.py
 SCons/Tool/hplink.py
+SCons/Tool/install.py
 SCons/Tool/jar.py
 SCons/Tool/javac.py
 SCons/Tool/JavaCommon.py
@@ -106,6 +108,7 @@ SCons/Tool/ifort.py
 SCons/Tool/ilink.py
 SCons/Tool/ilink32.py
 SCons/Tool/intelc.py
+SCons/Tool/ipkg.py
 SCons/Tool/latex.py
 SCons/Tool/lex.py
 SCons/Tool/link.py
@@ -121,6 +124,17 @@ SCons/Tool/msvs.py
 SCons/Tool/mwcc.py
 SCons/Tool/mwld.py
 SCons/Tool/nasm.py
+SCons/Tool/packaging/__init__.py
+SCons/Tool/packaging/ipk.py
+SCons/Tool/packaging/msi.py
+SCons/Tool/packaging/packager.py
+SCons/Tool/packaging/rpm.py
+SCons/Tool/packaging/src_tarbz2.py
+SCons/Tool/packaging/src_targz.py
+SCons/Tool/packaging/src_zip.py
+SCons/Tool/packaging/tarbz2.py
+SCons/Tool/packaging/targz.py
+SCons/Tool/packaging/zip.py
 SCons/Tool/pdf.py
 SCons/Tool/pdflatex.py
 SCons/Tool/pdftex.py
@@ -130,6 +144,7 @@ SCons/Tool/qt.py
 SCons/Tool/RCS.py
 SCons/Tool/rmic.py
 SCons/Tool/rpcgen.py
+SCons/Tool/rpm.py
 SCons/Tool/SCCS.py
 SCons/Tool/sgiar.py
 SCons/Tool/sgic++.py
@@ -144,6 +159,7 @@ SCons/Tool/swig.py
 SCons/Tool/tar.py
 SCons/Tool/tex.py
 SCons/Tool/tlib.py
+SCons/Tool/wix.py
 SCons/Tool/yacc.py
 SCons/Tool/zip.py
 SCons/Util.py
