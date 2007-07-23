@@ -180,14 +180,13 @@ def _SConscript(fs, *files, **kw):
                 else:
                     f = fs.File(str(fn))
                 _file_ = None
-                _filename_ = None
 
                 # Change directory to the top of the source
                 # tree to make sure the os's cwd and the cwd of
                 # fs match so we can open the SConscript.
                 fs.chdir(top, change_os_dir=1)
                 if f.rexists():
-                    _filename_ = f.rfile().get_abspath()
+                    _file_ = open(f.rfile().get_abspath(), "r")
                 elif f.has_src_builder():
                     # The SConscript file apparently exists in a source
                     # code management system.  Build it, but then clear
@@ -197,10 +196,7 @@ def _SConscript(fs, *files, **kw):
                     f.built()
                     f.builder_set(None)
                     if f.exists():
-                        _filename_ = f.get_abspath()
-
-                if _filename_:
-                    _file_ = open(_filename_, "r")
+                        _file=_ = open(f.get_abspath(), "r")
 
                 if _file_:
                     # Chdir to the SConscript directory.  Use a path
@@ -261,7 +257,7 @@ def _SConscript(fs, *files, **kw):
                     finally:
                         if old_file is not None:
                             call_stack[-1].globals.update({__file__:old_file})
-                    history.append(_filename_)
+                    history.append(f)
                 else:
                     SCons.Warnings.warn(SCons.Warnings.MissingSConscriptWarning,
                              "Ignoring missing SConscript '%s'" % f.path)
