@@ -182,7 +182,7 @@ class Base:
             self.distribution.extend(self.env.FindSourceFiles(node))
 
         pkg_kw = dict(self.items())
-        pkg_kw['PACKATE_TYPE'] = 'targz'
+        pkg_kw['PACKAGETYPE'] = 'src_targz'
         
         package = apply(self.env.Package, (self.distribution,), pkg_kw)
         self.env.Alias('dist-'+self['NAME'], package)
