@@ -184,8 +184,7 @@ class Base:
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = 'src_targz'
         
-        package = apply(self.env.Package, (self.distribution,), pkg_kw)[0]
-        package.dir.ignore.append(package) # don't build source distribution by default
+        package = self.env.Cloak(apply(self.env.Package, (self.distribution,), pkg_kw)[0])
         self.env.Alias('dist-'+self['NAME'], package)
 
         self.finished = True

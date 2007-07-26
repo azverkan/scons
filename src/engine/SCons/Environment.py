@@ -1492,6 +1492,15 @@ class Base(SubstitutionEnvironment):
             except KeyError:
                 CleanTargets[t] = flist
 
+    def Cloak(self, *nodes):
+        nodes = self.arg2nodes(SCons.Util.flatten(nodes))
+        for node in nodes:
+            if isinstance(node, SCons.Node.FS.Base):
+                node.dir.ignore.append(node)
+            else:
+                SCons.Warnings.warn(SCons.Warnings.Warning, "%s is not a filesystem node" % node)
+        return nodes
+
     def Configure(self, *args, **kw):
         nargs = [self]
         if args:
