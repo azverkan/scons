@@ -1647,11 +1647,11 @@ class Base(SubstitutionEnvironment):
 
     def Project(self, name=None, version=None, bugreport=None, *args, **kwargs):
         """Return or look up Project object."""
-        if name is None:
-            raise SCons.Errors.UserError("TODO/jph: Current project is not tracked yet")
         if version is None:
-            raise SCons.Errors.UserError("TODO/jph: Finding project not supported yet")
-
+            proj = SCons.Project.find_project(name)
+            if not proj:
+                raise SCons.Errors.UserError, 'No project named %s' % name
+            return proj
         return Project(self, NAME=name, VERSION=version, BUGREPORT=bugreport, *args, **kwargs)
 
     def Repository(self, *dirs, **kw):

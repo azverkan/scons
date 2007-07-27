@@ -95,10 +95,25 @@ class DirectoryHierarchy:
         if arch_dependent:
             self.__arch_dependent.append(name)
 
+# List that keeps all created projects that are not finished yet.
 _all_projects = []
+
 def finish_all(sconscripts=()):
-    for proj in _all_projects:
+    "Finish all unfinished projects."
+    for proj in tuple(_all_projects): # copy _all_projects, since
+                                      # proj.finish() modifies it
         proj.finish(sconscripts=sconscripts)
+
+    # Sanity check
+    assert _all_projects == [], _all_projects
+
+def find_project(name=None):
+    "Return first unfinished project, or first unfinished project that has given name."
+    if name is None:
+        return _all_projects[0]
+    for project in _all_projects:
+        if project['NAME'] == name:
+            return project
 
 class Base:
     """Base class for Project objects
@@ -175,6 +190,8 @@ class Base:
 
     # Internal API
     def finish(self, sconscripts=()):
+        global _all_projects
+
         if self.finished: return
 
         apply(self.Distribute, sconscripts)
@@ -188,6 +205,7 @@ class Base:
         self.env.Alias('dist-'+self['NAME'], package)
 
         self.finished = True
+        _all_projects.remove(self)
 
     # Entry points
     def Distribute(self, *args):
