@@ -276,6 +276,7 @@ def packageroot_emitter(pkg_root, honor_install_location=1):
         pkgroot = pkg_root
         # make sure the packageroot is a Dir object.
         if SCons.Util.is_String(pkgroot): pkgroot=env.Dir(pkgroot)
+        env.Ignore(pkgroot.dir, pkgroot)
 
         def copy_file_to_pkg_root(file, env=env, pkgroot=pkgroot, honor_install_location=honor_install_location):
             if file.is_under(pkgroot):
