@@ -701,8 +701,8 @@ class SubstitutionEnvironment:
 class Project(SubstitutionEnvironment, SCons.Project.Base):
     """Final class representing a Project.
     """
-    def __init__(self, parent, **kw):
-        self.env = parent
+    def __init__(self, env, **kw):
+        self.env = env
         SubstitutionEnvironment.__init__(self, **kw)
         SCons.Project.Base.__init__(self)
 
