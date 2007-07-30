@@ -277,10 +277,22 @@ class CHeaderFile(HeaderFile):
     def format_undefinition(self, name):
         return "/* #undef %s */" % name
 
+    _quote_chars = {
+        '\\' : '\\\\',
+        '"'  : '\\"',
+        '\a' : '\\a',
+        '\b' : '\\b',
+        '\f' : '\\f',
+        '\n' : '\\n',
+        '\r' : '\\r',
+        '\t' : '\\t',
+        }
+
     def format_string(self, str):
         """Format string using target language syntax.
         """
-        return '"' + string.replace(str, '"', '\\"') + '"'
+        return '"' + string.join(map(
+            lambda c: self._quote_chars.get(c,c), str),'') + '"'
 
     def format_integer(self, number):
         """Format integer number using target language syntax.
