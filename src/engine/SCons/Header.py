@@ -115,7 +115,9 @@ class HeaderFile(UserDict.UserDict):
 
     def _kwdefs(self):
         rv = []
-        for key in self.keys():
+        keys = self.keys()
+        keys.sort()
+        for key in keys:
             rv.append(self.Definition(key, self[key], self._descriptions.get(key), noinsert=True))
         return rv
 
