@@ -109,6 +109,7 @@ def finish_all(sconscripts=()):
 
 def find_project(name=None):
     "Return first unfinished project, or first unfinished project that has given name."
+    if not _all_projects: return None
     if name is None:
         return _all_projects[0]
     for project in _all_projects:
