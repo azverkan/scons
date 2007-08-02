@@ -30,40 +30,60 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import re
 from SCons.Script import *  # the usual scons stuff you get in a SConscript
-def do_subst_in_file(targetfile, sourcefile, dict):
-    """Replace all instances of the keys of dict with their values.
-    For example, if dict is {'%VERSION%': '1.2345', '%BASE%': 'MyProg'},
-    then all instances of %VERSION% in the file will be replaced with 1.2345 etc.
-    """
-    try:
-        f = open(sourcefile, 'rb')
-        contents = f.read()
-        f.close()
-    except:
-        raise SCons.Errors.UserError, "Can't read source file %s"%sourcefile
-    for (k,v) in dict.items():
-        contents = re.sub(k, v, contents)
-    try:
-        f = open(targetfile, 'wb')
-        f.write(contents)
-        f.close()
-    except:
-        raise SCons.Errors.UserError, "Can't write target file %s"%targetfile
-    return 0 # success
+
+import SCons.Node.Python
+import SCons.Subst
+import SCons.Util
 
 def subst_in_file(target, source, env):
-    if not env.has_key('SUBST_DICT'):
-        raise SCons.Errors.UserError, "SubstInFile requires SUBST_DICT to be set."
-    d = dict(env['SUBST_DICT']) # copy it
-    for (k,v) in d.items():
-        if callable(v):
-            d[k] = env.subst(v())
-        elif SCons.Util.is_String(v):
-            d[k]=env.subst(v)
-        else:
-            raise SCons.Errors.UserError, "SubstInFile: key %s: %s must be a string or callable"%(k, repr(v))
     for (t,s) in zip(target, source):
-        return do_subst_in_file(str(t), str(s), d)
+        # Computed substitution dictionary and restrict list is already in dependencies.
+        for child in t.children():
+            if isinstance(child, SCons.Node.Python.Value):
+                restrict, subst_dict = child.value
+                break
+            
+        try:
+            f = open(s.rfile().get_abspath(), 'rb')
+            contents = f.read()
+            f.close()
+        except:
+            raise SCons.Errors.UserError, "Can't read source file %s"%sourcefile
+
+        try:
+            f = open(t.get_abspath(), 'wb')
+        except:
+            raise SCons.Errors.UserError, "Can't write target file %s"%targetfile
+
+        subst_re = re.compile(env.subst('$SUBST_REGEXP', SCons.Subst.SUBST_RAW))
+        last, match = 0, subst_re.search(contents)
+        while match:
+            f.write(contents[last:match.start()])
+
+            key = match.group(1)
+            if key == '':
+                value = env.subst('$SUBST_MARKER', SCons.Subst.SUBST_RAW)
+            else:
+                if restrict and key not in restrict:
+                    raise SCons.Errors.UserError, 'Substitution key not allowed: %s' % key
+
+                try:
+                    if callable(subst_dict):
+                        value = subst_dict(env, key)
+                    else:
+                        value = env.subst(subst_dict[key], SCons.Subst.SUBST_RAW)
+                except KeyError:
+                    raise SCons.Errors.UserError, 'Unknown substitution key: %s' % key
+            f.write(value)
+
+            last = match.end()
+
+            match = subst_re.search(contents, pos=match.end())
+        f.write(contents[last:])
+
+        f.close()
+
+    return 0 # success
 
 def subst_in_file_string(target, source, env):
     """This is what gets printed on the console."""
@@ -74,13 +94,12 @@ def subst_emitter(target, source, env):
     """Add dependency from substituted SUBST_DICT to target.
     Returns original target, source tuple unchanged.
     """
-    d = env['SUBST_DICT'].copy() # copy it
-    for (k,v) in d.items():
-        if callable(v):
-            d[k] = env.subst(v())
-        elif SCons.Util.is_String(v):
-            d[k]=env.subst(v)
-    Depends(target, SCons.Node.Python.Value(d))
+    restrict = None
+    subst_dict = env.get('SUBST_DICT') or env.Dictionary()
+    if SCons.Util.is_Sequence(subst_dict):
+        restrict = subst_dict
+        subst_dict = env.Dictionary()
+    Depends(target, SCons.Node.Python.Value((restrict,subst_dict)))
     return target, source
 
 SubstituteBuilder = None
@@ -103,6 +122,14 @@ def generate(env):
             subst_action=SCons.Action.Action(subst_in_file, subst_in_file_string)
             SubstituteBuilder = Builder(action=subst_action, emitter=subst_emitter)
         env['BUILDERS']['Substitute'] = SubstituteBuilder
+
+    env.SetDefault(
+        SUBST_MARKER = '@',
+        SUBST_PREFIX = '${SUBST_MARKER}',
+        SUBST_SUFFIX = '${SUBST_MARKER}',
+        SUBST_KEY_REGEXP = '[a-zA-Z0-9_]+',
+        SUBST_REGEXP = '${SUBST_PREFIX}(|$SUBST_KEY_REGEXP)${SUBST_SUFFIX}'
+        )
 
 def exists(env):
     return 1
