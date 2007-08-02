@@ -33,6 +33,7 @@ selection method.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+import os.path
 import re
 
 import SCons.Builder
@@ -43,11 +44,11 @@ if TexinfoScanner is None:
     TexinfoScanner = SCons.Scanner.Classic('Texinfo', [], 'TEXINFOPATH',
                                            r'@(?:verbatim)?include\s+(.*)')
 
-setfilename_re = re.compile(r'^@setfilename (.*)$', re.M)
+setfilename_re = re.compile(r'^@setfilename\s+(.*)$', re.M)
 def info_emitter(target, source, env):
     setfilename_re_match = setfilename_re.search(
         open(source[0].rfile().get_abspath(), 'r').read())
-    target = [env.File(setfilename_re_match.group(1))]
+    target = [target[0].dir.File(setfilename_re_match.group(1))]
     return target, source
 
 InfoBuilder = None
@@ -58,7 +59,7 @@ def generate(env):
         MAKEINFOFLAGS='',
         TEXINFOPATH=[],
         _MAKEINFOINCFLAGS='${_concat("-I", TEXINFOPATH, "", __env__, RDirs)}',
-        MAKEINFOCOM='cd ${TARGET.dir} && $MAKEINFO $_MAKEINFOINCFLAGS $MAKEINFOFLAGS ${SOURCE}',
+        MAKEINFOCOM='$MAKEINFO $_MAKEINFOINCFLAGS $MAKEINFOFLAGS ${SOURCE}',
         TEXINFOPATH=[]
         )
 
@@ -72,7 +73,9 @@ def generate(env):
                                                 source_scanner = TexinfoScanner,
                                                 emitter = info_emitter,
                                                 suffix = '.info',
-                                                src_suffix = ['.texi', '.texinfo'])
+                                                src_suffix = ['.texi', '.texinfo'],
+                                                single_source = 1,
+                                                chdir = 1)
         env['BUILDERS']['Info'] = InfoBuilder
 
 def exists(env):
