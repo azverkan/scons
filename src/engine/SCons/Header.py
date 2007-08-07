@@ -251,11 +251,7 @@ class HeaderFile(UserDict.UserDict):
         """
         def build_header(target, source, env):
             self.Write(str(target[0]))
-        return SCons.Action.Action(build_header, varlist=[repr(self._top),
-                                                          repr(self._maincontent),
-                                                          repr(self._bottom),
-                                                          repr(self.data),
-                                                          repr(self._descriptions)])
+        return SCons.Action.Action(build_header)
 
 class CHeaderFile(HeaderFile):
     """Header file generator for C language
