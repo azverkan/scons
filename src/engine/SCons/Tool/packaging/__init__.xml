@@ -510,10 +510,6 @@ TODO
 
 </builder>
 
-<builder name="FindSourceFiles">
-A convenience function which returns all leafs of the build tree.
-</builder>
-
 <builder name="FindInstalledFiles">
 Returns all files "build" by the install builder.
 </builder>

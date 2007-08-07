@@ -175,43 +175,6 @@ def Package(env, target=None, source=None, **kw):
     targets.extend(env.Alias( 'package', targets ))
     return targets
 
-def FindSourceFiles(env, target=None, source=None ):
-    """ returns a list of all children of the target nodes, which have no
-    children. This selects all leaves of the DAG that gets build by SCons for
-    handling dependencies.
-    """
-    if target==None: target = '.'
-
-    nodes = env.arg2nodes(target, env.fs.Entry)
-
-    sources = []
-    def build_source(ss):
-        for s in ss:
-            if s.__class__==SCons.Node.FS.Dir:
-                build_source(s.all_children())
-            elif not s.has_builder() and s.__class__==SCons.Node.FS.File:
-                sources.append(s)
-            else:
-                build_source(s.sources)
-
-    for node in nodes:
-        build_source(node.all_children())
-
-    # now strip the build_node from the sources by calling the srcnode
-    # function
-    def get_final_srcnode(file):
-        srcnode = file.srcnode()
-        while srcnode != file.srcnode():
-            srcnode = file.srcnode()
-        return srcnode
-
-    # get the final srcnode for all nodes, this means stripping any
-    # attached build node.
-    map( get_final_srcnode, sources )
-
-    # remove duplicates
-    return list(set(sources))
-
 def FindInstalledFiles(env, source=[], target=[]):
     """ returns the list of all targets of the Install and InstallAs Builder.
     """
@@ -225,12 +188,10 @@ def generate(env):
     try:
         env['BUILDERS']['Package']
         env['BUILDERS']['Tag']
-        env['BUILDERS']['FindSourceFiles']
         env['BUILDERS']['FindInstalledFiles']
     except KeyError:
         env['BUILDERS']['Package'] = Package
         env['BUILDERS']['Tag'] = Tag
-        env['BUILDERS']['FindSourceFiles'] = FindSourceFiles
         env['BUILDERS']['FindInstalledFiles'] = FindInstalledFiles
 
 def exists(env):
