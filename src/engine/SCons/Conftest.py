@@ -448,34 +448,43 @@ def _Have(context, key, have):
     "key" is a "HAVE_abc" name.  It is turned into all CAPITALS and non-
     alphanumerics are replaced by an underscore.
     The value of "have" can be:
-    1      - Feature is defined, add "#define key".
-    0      - Feature is not defined, add "/* #undef key */".
+    1      - Feature is defined, add "\#define key".
+    0      - Feature is not defined, add "/* \#undef key */".
              Adding "undef" is what autoconf does.  Not useful for the
              compiler, but it shows that the test was done.
-    number - Feature is defined to this number "#define key have".
+    number - Feature is defined to this number "\#define key have".
              Doesn't work for 0 or 1, use a string then.
-    string - Feature is defined to this string "#define key have".
+    string - Feature is defined to this string "\#define key have".
              Give "have" as is should appear in the header file, include quotes
              when desired and escape special characters!
     """
     key_up = string.upper(key)
     key_up = re.sub('[^A-Z0-9_]', '_', key_up)
     context.havedict[key_up] = have
-    if have == 1:
-        line = "#define %s 1\n" % key_up
-    elif have == 0:
-        line = "/* #undef %s */\n" % key_up
-    elif type(have) == IntType:
-        line = "#define %s %d\n" % (key_up, have)
+    if hasattr(context, "header"):
+        if have == 1: 
+            context.header[key_up] = 1
+        elif have == 0:
+            context.header[key_up] = None
+        else:
+            context.header[key_up] = have
     else:
-        line = "#define %s %s\n" % (key_up, str(have))
-    
-    if context.headerfilename:
-        f = open(context.headerfilename, "a")
-        f.write(line)
-        f.close()
-    elif hasattr(context,'config_h'):
-        context.config_h = context.config_h + line
+        # Fall back to old behaviour
+        if have == 1:
+            line = "#define %s 1\n" % key_up
+        elif have == 0:
+            line = "/* #undef %s */\n" % key_up
+        elif type(have) == IntType:
+            line = "#define %s %d\n" % (key_up, have)
+        else:
+            line = "#define %s %s\n" % (key_up, str(have))
+
+        if context.headerfilename:
+            f = open(context.headerfilename, "a")
+            f.write(line)
+            f.close()
+        elif hasattr(context,'config_h'):
+            context.config_h = context.config_h + line
 
 
 def _LogFailed(context, text, msg):
