@@ -39,6 +39,7 @@ import types
 import SCons.Action
 import SCons.Builder
 import SCons.Errors
+import SCons.Header
 import SCons.Job
 import SCons.Node.FS
 import SCons.Taskmaster
@@ -333,7 +334,8 @@ class SConf:
     """
 
     def __init__(self, env, custom_tests = {}, conf_dir='$CONFIGUREDIR',
-                 log_file='$CONFIGURELOG', config_h = None, _depth = 0): 
+                 log_file='$CONFIGURELOG', config_h = None, header = None,
+                 _depth = 0): 
         """Constructor. Pass additional tests in the custom_tests-dictinary,
         e.g. custom_tests={'CheckPrivate':MyPrivateTest}, where MyPrivateTest
         defines a custom test.
@@ -373,6 +375,8 @@ class SConf:
         if not config_h is None:
             config_h = SConfFS.File(config_h)
         self.config_h = config_h
+        if header is not None:
+            self.header = env.Header(header)
         self._startup()
 
     def Finish(self):
@@ -681,6 +685,7 @@ class CheckContext:
         # in tests, we must ensure, that the dependencies are worked out
         # correctly. Note that we can't use Conftest.py's support for config.h,
         # cause we will need to specify a builder for the config.h file ...
+        self.header = sconf.header
 
     def Message(self, text):
         """Inform about what we are doing right now, e.g.
