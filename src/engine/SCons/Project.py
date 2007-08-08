@@ -168,6 +168,9 @@ class Base:
         self.env.Alias(my_alias('install'), my_alias('install-exec'))
         self.env.Alias(my_alias('install'), my_alias('install-init')) # FIXME
 
+        if not self.env.has_key('PROJECT'):
+            self.env['PROJECT'] = self
+
     # Wrappers
     def Header(self, header=None, lang=None):
         if header is None:
@@ -187,22 +190,24 @@ class Base:
         header.Template('PACKAGE_BUGREPORT', 'Define to the address where bug reports for this package should be sent.', self.get('BUGREPORT'))
 
         if header.language == 'C':
-            self.env.Append(CPPPATH=header.node.get_dir())
+            self.env.Append(CPPPATH=header.node.dir)
 
     # Internal API
     def finish(self, sconscripts=()):
         global _all_projects
 
-        if self.finished: return
+        if self.finished:
+            raise SCons.Errors.UserError('Project %s already finished.' % self['NAME'])
 
         apply(self.Distribute, sconscripts)
+
         for node in self.distribution_roots:
             self.distribution.extend(self.env.FindSourceFiles(node))
 
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = 'src_targz'
         
-        package = apply(self.env.Package, (self.distribution,), pkg_kw)
+        package = apply(self.env.Package, (list(set(self.distribution)),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
         self.env.Alias('dist-'+self['NAME'], package)
 
@@ -218,8 +223,7 @@ class Base:
         return nodes
 
     def Attach(self, *nodes):
-        print "Attached:", nodes
-        self.distribution_roots.extend(nodes)
+        self.distribution_roots.extend(SCons.Util.flatten(nodes))
         return nodes
 
     def Test(self, *nodes):
