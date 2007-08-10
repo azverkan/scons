@@ -120,7 +120,7 @@ def generate(env):
         global SubstituteBuilder
         if SubstituteBuilder is None:
             subst_action=SCons.Action.Action(subst_in_file, subst_in_file_string)
-            SubstituteBuilder = Builder(action=subst_action, emitter=subst_emitter)
+            SubstituteBuilder = Builder(action=subst_action, emitter=subst_emitter, src_suffix='.py')
         env['BUILDERS']['Substitute'] = SubstituteBuilder
 
     env.SetDefault(
