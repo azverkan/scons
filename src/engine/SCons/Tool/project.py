@@ -155,6 +155,11 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             TEST_ENVIRONMENT = {},
             TEST_COMMAND = '',
             TEST_ARGS = '',
+            DIST_TYPE = 'src_targz',
+
+            # Autotools compatibility
+            PACKAGE = self['NAME'],
+            configure_input = '',
             )
 
         if self.has_key('header'):
@@ -206,6 +211,31 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         if header.language == 'C':
             self.env.Append(CPPPATH=header.node.dir)
 
+    def Substitute(self, *args, **kwargs):
+        """Substitute, but default dictionary is parent Environment's
+        dictionary, updated by self."""
+        
+        if 'substitute' not in self.env['TOOLS']:
+            self.env.Tool('substitute')
+
+        mydict = {}
+        mydict.update(self.env.Dictionary())
+        mydict.update(self._dict)
+
+        userdict = kwargs.get('SUBST_DICT', None)
+        if userdict is None:
+            final_dict = mydict
+        elif SCons.Util.is_Sequence(userdict):
+            final_dict = {}
+            for key in userdict:
+                if mydict.has_key(key):
+                    final_dict[key] = mydict[key]
+        else:
+            final_dict = userdict
+
+        kwargs['SUBST_DICT'] = final_dict
+        return apply(self.env.Substitute, args, kwargs)
+
     # Internal API
     def finish(self, sconscripts=()):
         global _all_projects
@@ -219,7 +249,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             self.distribution.extend(self.env.FindSourceFiles(node))
 
         pkg_kw = dict(self.items())
-        pkg_kw['PACKAGETYPE'] = 'src_targz'
+        pkg_kw['PACKAGETYPE'] = self['DIST_TYPE']
         
         package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
@@ -287,7 +317,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         kw.update(self.env.get('autoinstall_keywords', {}))
         kw.update(self.get('autoinstall_keywords', {}))
         kw.update(getattr(node.attributes, 'autoinstall_keywords', {}))
-        kw.update(node.env.get('autoinstall_keywords', {}))
+        if node.env:
+            kw.update(node.env.get('autoinstall_keywords', {}))
         kw.update(kwargs)
 
         try: install = kw['install']
@@ -320,6 +351,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
     def AutoInstall(self, *nodes, **kwargs):
         returned_nodes = []
         for node in SCons.Util.flatten(nodes):
+            if SCons.Util.is_String(node):
+                node = self.env.File(node)
             returned_nodes.append(
                 apply(self.__autoinstall_node, (node,), kwargs))
 
