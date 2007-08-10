@@ -61,12 +61,12 @@ import SCons.Errors
 import SCons.Job
 import SCons.Node
 import SCons.Node.FS
-import SCons.Project
 import SCons.SConf
 import SCons.Script
 import SCons.Sig
 import SCons.Taskmaster
-import SCons.Util
+import SCons.Tool.project
+import SCons.Util                       # FIXME
 import SCons.Warnings
 
 #
@@ -818,7 +818,7 @@ def _main(parser):
         SCons.Script._SConscript.clean_history()
         for script in scripts:
             SCons.Script._SConscript._SConscript(fs, script)
-        SCons.Project.finish_all(SCons.Script._SConscript.get_history())
+        SCons.Tool.project.finish_all(SCons.Script._SConscript.get_history()) # FIXME
     except SCons.Errors.StopError, e:
         # We had problems reading an SConscript file, such as it
         # couldn't be copied in to the BuildDir.  Since we're just
