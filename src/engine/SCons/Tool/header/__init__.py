@@ -1,4 +1,4 @@
-"""SCons.Header
+"""SCons.Tool.header
 
 Header file generation.
 """
@@ -301,3 +301,31 @@ class CHeaderFile(HeaderFile):
         """Format floating point number using target language syntax.
         """
         return repr(number)
+
+
+def HeaderMethod(env, name, lang=None, dict=None, **kwargs):
+    node = env.arg2nodes(name)[0]
+    try:
+        header = node.attributes.header
+        if lang:
+            raise SCons.Errors.UserError(
+                "%s is already defined header, can't change its language" % node)
+        if dict: header.update(dict)
+        header.update(kwargs)
+        return header
+    except AttributeError: pass
+
+    header_class = SCons.Header.CHeaderFile # TODO: use a map.
+    header = apply(header_class, (dict,), kwargs)
+    tmp_builder = SCons.Builder.Builder(action=header.Action())
+    node = tmp_builder(env, name)
+    node[0].attributes.header = header
+    header.set_node(node[0])
+    return header
+
+
+def generate(env):
+    env.AddMethod(HeaderMethod, 'Header')
+
+def exists(env):
+    return True

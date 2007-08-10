@@ -376,6 +376,8 @@ class SConf:
             config_h = SConfFS.File(config_h)
         self.config_h = config_h
         if header is not None:
+            if 'header' not in env['TOOLS']:
+                env.Tool('header')
             self.header = env.Header(header)
         self._startup()
 

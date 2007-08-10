@@ -46,14 +46,12 @@ import SCons.Builder
 from SCons.Debug import logInstanceCreation
 import SCons.Defaults
 import SCons.Errors
-import SCons.Header
 import SCons.Memoize
 import SCons.Node
 import SCons.Node.Alias
 import SCons.Node.FS
 import SCons.Node.Python
 import SCons.Platform
-import SCons.Project
 import SCons.SConsign
 import SCons.Sig
 import SCons.Subst
@@ -697,14 +695,6 @@ class SubstitutionEnvironment:
                         t.insert(0, v)
             self[key] = t
         return self
-
-class Project(SubstitutionEnvironment, SCons.Project.Base):
-    """Final class representing a Project.
-    """
-    def __init__(self, env, **kw):
-        self.env = env
-        SubstitutionEnvironment.__init__(self, **kw)
-        SCons.Project.Base.__init__(self)
 
 # Used by the FindSourceFiles() method, below.
 # Stuck here for support of pre-2.2 Python versions.
@@ -1585,26 +1575,6 @@ class Base(SubstitutionEnvironment):
         else:
             return result[0]
 
-    def Header(self, name, lang=None, dict=None, **kwargs):
-        node = self.arg2nodes(name)[0]
-        try:
-            header = node.attributes.header
-            if lang:
-                raise SCons.Errors.UserError(
-                    "%s is already defined header, can't change its language" % node)
-            if dict: header.update(dict)
-            header.update(kwargs)
-            return header
-        except AttributeError: pass
-
-        header_class = SCons.Header.CHeaderFile # TODO: use a map.
-        header = apply(header_class, (dict,), kwargs)
-        tmp_builder = SCons.Builder.Builder(action=header.Action())
-        node = tmp_builder(self, name)
-        node[0].attributes.header = header
-        header.set_node(node[0])
-        return header
-
     def Ignore(self, target, dependency):
         """Ignore a dependency."""
         tlist = self.arg2nodes(target, self.fs.Entry)
@@ -1635,15 +1605,6 @@ class Base(SubstitutionEnvironment):
         for t in tlist:
             t.set_precious()
         return tlist
-
-    def Project(self, name=None, version=None, bugreport=None, *args, **kwargs):
-        """Return or look up Project object."""
-        if version is None:
-            proj = SCons.Project.find_project(name)
-            if not proj:
-                raise SCons.Errors.UserError, 'No project named %s' % name
-            return proj
-        return Project(self, NAME=name, VERSION=version, BUGREPORT=bugreport, *args, **kwargs)
 
     def Repository(self, *dirs, **kw):
         dirs = self.arg2nodes(list(dirs), self.fs.Dir)

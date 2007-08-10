@@ -27,7 +27,7 @@ import StringIO
 import sys
 import unittest
 
-from SCons.Header import *
+from SCons.Tool.header import *
 
 class DummyHeaderFile(HeaderFile):
     """Dummy header file for tests.

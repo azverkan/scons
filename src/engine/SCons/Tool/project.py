@@ -1,4 +1,4 @@
-"""SCons.Project
+"""SCons.Tool.project
 
 Base class for constructing and managing Projects.  These group and
 manage information needed to automate deployment, which is central
@@ -33,6 +33,7 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import os.path
 
 import SCons.Node.FS
+import SCons.Tool.header
 import SCons.Tool.packaging
 
 # Set of file names that are automatically distributed.
@@ -116,19 +117,16 @@ def find_project(name=None):
         if project['NAME'] == name:
             return project
 
-class Base:
-    """Base class for Project objects
-
-    Final class inherits this class and
-    SCons.Environment.SubstitutionEnvironment in Environment.py to
-    avoid mutual import.
-    """
-
-    def __init__(self):
+class Project(SCons.Environment.SubstitutionEnvironment):
+    def __init__(self, env, **kw):
         """Project-specific initialisation.
 
         To be run after initializing SubstitutionEnvironment.
         """
+        apply(SCons.Environment.SubstitutionEnvironment.__init__, (self,), kw)
+        
+        self.env = env
+        
         if not 'packaging' in self.env['TOOLS']:
             self.env.Tool('packaging')
 
@@ -176,7 +174,7 @@ class Base:
     def Header(self, header=None, lang=None):
         if header is None:
             return self['header']
-        if not isinstance(header, SCons.Header.HeaderFile):
+        if not isinstance(header, SCons.Tool.header.HeaderFile):
             header = self.env.Header(header, lang)
         self['header'] = header
 
@@ -280,3 +278,22 @@ class Base:
         self.env.Alias('all-'+self['NAME'], returned_nodes)
         self.Attach(returned_nodes)
         return returned_nodes
+
+def ProjectMethod(env, name=None, version=None, bugreport=None, *args, **kwargs):
+    """Return or look up Project object."""
+    if version is None:
+        proj = SCons.Project.find_project(name)
+        if not proj:
+            raise SCons.Errors.UserError, 'No project named %s' % name
+        return proj
+    return Project(env, NAME=name, VERSION=version, BUGREPORT=bugreport, *args, **kwargs)
+
+def generate(env):
+    if 'header' not in env['TOOLS']:
+        env.Tool('header')
+    print 'dupa!'
+
+    env.AddMethod(ProjectMethod, 'Project')
+
+def exists(env):
+    return True
