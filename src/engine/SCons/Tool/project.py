@@ -118,6 +118,15 @@ def find_project(name=None):
             return project
 
 class Project(SCons.Environment.SubstitutionEnvironment):
+    def _setdefault(self, **kw):
+        for k in kw.keys():
+            if self._dict.has_key(k):
+                del kw[k]
+        self._dict.update(kw)
+
+    def _my_alias(self, alias):
+        return '%s-%s' % (alias, self['NAME'])
+
     def __init__(self, env, **kw):
         """Project-specific initialisation.
 
@@ -137,9 +146,13 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.distribution_roots = []
         self.tests = []
 
-        self['DIR'] = DirectoryHierarchy()
-        if not self.has_key('shortname'):
-            self['shortname'] = self['NAME']
+        self._setdefault(
+            DIR =  DirectoryHierarchy(),
+            shortname = self['NAME'],
+            TEST_ENVIRONMENT = {},
+            TEST_COMMAND = '',
+            TEST_ARGS = '',
+            )
 
         if self.has_key('header'):
             if SCons.Util.is_Sequence(self['header']):
@@ -153,19 +166,18 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             if f.rexists():
                 self.distribution.append(f)
 
-        def my_alias(alias): return '%s-%s' % (alias, self['NAME'])
         for alias in ('all', 'dist', 'check', 'distcheck',
                       'install-data', 'install-exec', 'install-init'):
-            self.env.Alias(my_alias(alias))
-            self.env.Alias(alias, my_alias(alias))
+            self.env.Alias(self._my_alias(alias))
+            self.env.Alias(alias, self._my_alias(alias))
 
         self.env.Alias('install','install-data')
         self.env.Alias('install','install-exec')
         self.env.Alias('install','install-init') # FIXME
 
-        self.env.Alias(my_alias('install'), my_alias('install-data'))
-        self.env.Alias(my_alias('install'), my_alias('install-exec'))
-        self.env.Alias(my_alias('install'), my_alias('install-init')) # FIXME
+        self.env.Alias(self._my_alias('install'), self._my_alias('install-data'))
+        self.env.Alias(self._my_alias('install'), self._my_alias('install-exec'))
+        self.env.Alias(self._my_alias('install'), self._my_alias('install-init')) # FIXME
 
         if not self.env.has_key('PROJECT'):
             self.env['PROJECT'] = self
@@ -206,28 +218,61 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = 'src_targz'
         
-        package = apply(self.env.Package, (list(set(self.distribution)),), pkg_kw)
+        package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
         self.env.Alias('dist-'+self['NAME'], package)
 
         self.finished = True
         _all_projects.remove(self)
 
+    def add_dist_root(self, nodes):
+        self.distribution_roots.extend(nodes)
+
     # Entry points
-    def Distribute(self, *args):
-        nodes = []
-        for arg in args:
-            nodes.extend(self.arg2nodes(arg))
+    def Distribute(self, *nodes):
+        nodes = list(SCons.Util.flatten(nodes))
         self.distribution.extend(nodes)
         return nodes
 
     def Attach(self, *nodes):
-        self.distribution_roots.extend(SCons.Util.flatten(nodes))
+        nodes = self.arg2nodes(SCons.Util.flatten(nodes))
+        self.add_dist_root(nodes)
         return nodes
 
-    def Test(self, *nodes):
-        self.Attach(nodes)
-        self.tests.extend(SCons.Util.flatten(nodes))
+    def Test(self, nodes, sources=[],
+             distribute_sources=True, environment=None, command=None, args=None):
+        nodes = self.arg2nodes(SCons.Util.flatten([nodes]))
+
+        if SCons.Util.is_Sequence(sources):
+            sources = SCons.Util.flatten(sources)
+        else:
+            sources = [sources]
+
+        if SCons.Util.is_Sequence(nodes):
+            nodes = SCons.Util.flatten(nodes)
+        else:
+            nodes = [nodes]
+
+        if environment is None:
+            environment = self['TEST_ENVIRONMENT']
+
+        if command is None:
+            command = self['TEST_COMMAND']
+
+        if args is None:
+            args = self['TEST_ARGS']
+
+        for node in nodes:
+            cmd = self.env.Command(str(node)+' test', # fake file name to make Command actually work
+                                   [node,self._my_alias('all')] + sources,
+                                   '$COMMAND ${SOURCE.abspath} $ARGS',
+                                   COMMAND=command,
+                                   ARGS=args,
+                                   ENV=environment)
+            if distribute_sources:
+                self.add_dist_root(cmd)
+            self.env.Alias(self._my_alias('check'), cmd)
+
         return nodes
 
     __default_autoinstall_keywords = dict(executable = False,
