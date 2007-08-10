@@ -137,6 +137,7 @@ class Base:
 
         self.distribution = []
         self.distribution_roots = []
+        self.tests = []
 
         self['DIR'] = DirectoryHierarchy()
         if not self.has_key('shortname'):
@@ -227,8 +228,8 @@ class Base:
         return nodes
 
     def Test(self, *nodes):
-        print "Would test:", nodes
-        self.distribution_roots.extend(nodes)
+        self.Attach(nodes)
+        self.tests.extend(SCons.Util.flatten(nodes))
         return nodes
 
     __default_autoinstall_keywords = dict(executable = False,
@@ -277,5 +278,5 @@ class Base:
                 apply(self.__autoinstall_node, (node,), kwargs))
 
         self.env.Alias('all-'+self['NAME'], returned_nodes)
-        self.distribution_roots.extend(returned_nodes)
+        self.Attach(returned_nodes)
         return returned_nodes
