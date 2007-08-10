@@ -31,6 +31,8 @@ concept to Automake compatibility.
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import os.path
+import sys
+from distutils import sysconfig
 
 import SCons.Node.FS
 import SCons.Tool.header
@@ -82,6 +84,7 @@ class DirectoryHierarchy:
         self.pkglib = "${DIR.exec_prefix}/lib/${NAME}" # not required by standard, Automake-specific
         self.oldinclude = "/usr/include"
         self.pkgoldinclude = "${DIR.oldinclude}/${NAME}" # not required by standard
+        self.python = sysconfig.get_python_lib(0,0,prefix=sys.prefix) # not required by standard
 
         self.__arch_dependent = ['exec_prefix', 'bin', 'sbin', 'libexec', 'pkglibexec', 'lib', 'pkglib']
 
