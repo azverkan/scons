@@ -291,7 +291,6 @@ def ProjectMethod(env, name=None, version=None, bugreport=None, *args, **kwargs)
 def generate(env):
     if 'header' not in env['TOOLS']:
         env.Tool('header')
-    print 'dupa!'
 
     env.AddMethod(ProjectMethod, 'Project')
 
