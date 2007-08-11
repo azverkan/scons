@@ -31,6 +31,7 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import re
 import string
 import textwrap
+import time
 from types import *
 import UserDict
 
@@ -246,12 +247,18 @@ class HeaderFile(UserDict.UserDict):
         if needs_closing:
             file.close()
 
-    def Action(self):
-        """Return Action object to build this header.
+    def _bld_action_func(self, target, source, env):
+        self.Write(target[0].get_abspath())
+
+    def _bld_emitter(self, target, source, env):
+        return target, source+[SCons.Node.Python.Value(time.time())] # FIXME
+
+    def _bld(self, env):
+        """Return a Builder to build this header.
         """
-        def build_header(target, source, env):
-            self.Write(str(target[0]))
-        return SCons.Action.Action(build_header)
+        act = env.Action(self._bld_action_func, "Generating header file '${TARGET}'.")
+        bld = env.Builder(action=act, emitter=self._bld_emitter)
+        return bld
 
 class CHeaderFile(HeaderFile):
     """Header file generator for C language
@@ -306,20 +313,21 @@ class CHeaderFile(HeaderFile):
 def HeaderMethod(env, name, lang=None, dict=None, **kwargs):
     node = env.arg2nodes(name)[0]
     try:
-        header = node.attributes.header
+        header = node.attributes.__header
+    except AttributeError: pass
+    else:
         if lang:
             raise SCons.Errors.UserError(
                 "%s is already defined header, can't change its language" % node)
         if dict: header.update(dict)
         header.update(kwargs)
         return header
-    except AttributeError: pass
 
-    header_class = SCons.Header.CHeaderFile # TODO: use a map.
+    header_class = CHeaderFile # TODO: use a map.
     header = apply(header_class, (dict,), kwargs)
-    tmp_builder = SCons.Builder.Builder(action=header.Action())
-    node = tmp_builder(env, name)
-    node[0].attributes.header = header
+    bld = header._bld(env)
+    node = bld(env, name)
+    node[0].attributes.__header = header
     header.set_node(node[0])
     return header
 
