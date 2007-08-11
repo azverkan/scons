@@ -704,6 +704,9 @@ def build_source(ss, result):
             build_source(s.all_children(), result)
         elif s.has_builder():
             build_source(s.sources, result)
+            if s.implicit is None:
+                s.scan()
+            build_source(s.implicit, result)
         elif isinstance(s.disambiguate(), SCons.Node.FS.File):
             result.append(s)
 
