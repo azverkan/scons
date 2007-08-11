@@ -245,6 +245,12 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 
         apply(self.Distribute, sconscripts)
 
+        self.distribution = self.arg2nodes(self.distribution, self.env.fs.Entry)
+
+        for node in self.distribution:
+            if node.has_builder():
+                self.distribution_roots.append(node)
+
         for node in self.distribution_roots:
             self.distribution.extend(self.env.FindSourceFiles(node))
 
@@ -363,7 +369,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 def ProjectMethod(env, name=None, version=None, bugreport=None, *args, **kwargs):
     """Return or look up Project object."""
     if version is None:
-        proj = SCons.Project.find_project(name)
+        proj = find_project(name)
         if not proj:
             raise SCons.Errors.UserError, 'No project named %s' % name
         return proj
