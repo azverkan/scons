@@ -39,7 +39,6 @@ import types
 import SCons.Action
 import SCons.Builder
 import SCons.Errors
-import SCons.Header
 import SCons.Job
 import SCons.Node.FS
 import SCons.Taskmaster
