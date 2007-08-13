@@ -94,7 +94,7 @@ class DirectoryHierarchy:
     def is_arch_dependent(self, name):
         return name in self.__arch_dependent
 
-    def defineDirectory(self, name, directory, arch_dependent=False):
+    def DefineDirectory(self, name, directory, arch_dependent=False):
         self.setattr(name, directory)
         if arch_dependent:
             self.__arch_dependent.append(name)
