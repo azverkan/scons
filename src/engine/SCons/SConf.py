@@ -628,6 +628,7 @@ class SConf:
                                      _stringSource)
         sconfSrcBld = SCons.Builder.Builder(action=action)
         self.env.Append( BUILDERS={'SConfSourceBuilder':sconfSrcBld} )
+        self.env.Replace( LIBOBJS=[], ALL_LIBOBJS=[] )
         self.config_h_text = _ac_config_hs.get(self.config_h, "")
         self.active = 1
         # only one SConf instance should be active at a time ...
@@ -652,6 +653,7 @@ class SConf:
         if not self.config_h is None:
             _ac_config_hs[self.config_h] = self.config_h_text
         self.env.fs = self.lastEnvFs
+        self.env.Append(LIBS=self.env.get('LIBOBJS',[]))
 
 class CheckContext:
     """Provides a context for configure tests. Defines how a test writes to the
@@ -781,8 +783,8 @@ class CheckContext:
     #### End of stuff used by Conftest.py.
 
 
-def CheckFunc(context, function_name, header = None, language = None):
-    res = SCons.Conftest.CheckFunc(context, function_name, header = header, language = language)
+def CheckFunc(context, function_name, header = None, language = None, add_libobj = False):
+    res = SCons.Conftest.CheckFunc(context, function_name, header = header, language = language, add_libobj = add_libobj)
     context.did_show_result = 1
     return not res
 

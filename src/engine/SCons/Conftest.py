@@ -98,6 +98,8 @@ import re
 import string
 from types import IntType
 
+import SCons.Util
+
 #
 # PUBLIC VARIABLES
 #
@@ -143,7 +145,7 @@ int main() {
     return ret
 
 
-def CheckFunc(context, function_name, header = None, language = None):
+def CheckFunc(context, function_name, header = None, language = None, add_libobj=False):
     """
     Configure check for a function "function_name".
     "language" should be "C" or "C++" and is used to select the compiler.
@@ -153,6 +155,10 @@ def CheckFunc(context, function_name, header = None, language = None):
     Sets HAVE_function_name in context.havedict according to the result.
     Note that this uses the current value of compiler and linker flags, make
     sure $CFLAGS, $CPPFLAGS and $LIBS are set correctly.
+    When "add_libobj" is True or 1 and function is not found, an
+    Object("function_name"."extension for language") is added to env['LIBS']
+    on finishing the context.  "add_libobj" can also be a string or Node,
+    or a sequence of those, that will denote source(s) for such Object.
     Returns an empty string for success, an error message for failure.
     """
 
@@ -207,6 +213,15 @@ int main() {
     context.Display("Checking for %s function %s()... " % (lang, function_name))
     ret = context.BuildProg(text, suffix)
     _YesNoResult(context, ret, "HAVE_" + function_name, text)
+
+    if add_libobj:
+        if add_libobj == 1:
+            add_libobj = [function_name + suffix]
+        libobj = context.env.Object(add_libobj)
+        context.env.Append(ALL_LIBOBJS=libobj)
+        if ret:
+            context.env.Append(LIBOBJS=libobj)
+        
     return ret
 
 

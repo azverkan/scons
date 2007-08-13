@@ -244,6 +244,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             raise SCons.Errors.UserError('Project %s already finished.' % self['NAME'])
 
         apply(self.Distribute, sconscripts)
+        apply(self.Attach, self.env.get('ALL_LIBOBJS', []))
 
         self.distribution = self.arg2nodes(self.distribution, self.env.fs.Entry)
 
