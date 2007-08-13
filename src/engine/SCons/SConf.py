@@ -378,6 +378,8 @@ class SConf:
             if 'header' not in env['TOOLS']:
                 env.Tool('header')
             self.header = env.Header(header)
+        if config_h or header:
+            env.Append(CPPDEFINES={'HAVE_CONFIG_H':None})
         self._startup()
 
     def Finish(self):
