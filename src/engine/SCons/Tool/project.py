@@ -312,6 +312,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             if distribute_sources:
                 self.add_dist_root(cmd)
             self.env.Alias(self._my_alias('check'), cmd)
+            self.env.Ignore(cmd[0].dir, cmd)
 
         return nodes
 
