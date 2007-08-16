@@ -17,7 +17,6 @@ SCons/Defaults.py
 SCons/Environment.py
 SCons/Errors.py
 SCons/Executor.py
-SCons/Header.py
 SCons/Job.py
 SCons/exitfuncs.py
 SCons/Memoize.py
@@ -42,7 +41,6 @@ SCons/Platform/os2.py
 SCons/Platform/posix.py
 SCons/Platform/sunos.py
 SCons/Platform/win32.py
-SCons/Project.py
 SCons/Scanner/__init__.py
 SCons/Scanner/C.py
 SCons/Scanner/D.py
@@ -93,6 +91,8 @@ SCons/Tool/gas.py
 SCons/Tool/gcc.py
 SCons/Tool/gnulink.py
 SCons/Tool/gs.py
+SCons/Tool/header/__init__.py
+SCons/Tool/header/HeaderTests.py
 SCons/Tool/hpc++.py
 SCons/Tool/hpcc.py
 SCons/Tool/hplink.py
@@ -140,6 +140,7 @@ SCons/Tool/pdflatex.py
 SCons/Tool/pdftex.py
 SCons/Tool/Perforce.py
 SCons/Tool/PharLapCommon.py
+SCons/Tool/project.py
 SCons/Tool/qt.py
 SCons/Tool/RCS.py
 SCons/Tool/rmic.py
