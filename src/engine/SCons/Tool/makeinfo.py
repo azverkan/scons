@@ -51,7 +51,7 @@ def info_emitter(target, source, env):
     target = [target[0].dir.File(setfilename_re_match.group(1))]
     return target, source
 
-InfoBuilder = None
+MakeinfoBuilder = None
 
 def generate(env):
     env.SetDefault(
@@ -64,19 +64,19 @@ def generate(env):
         )
 
     try:
-        env['BUILDERS']['Info']
+        env['BUILDERS']['Makeinfo']
     except KeyError:
-        global InfoBuilder, TexinfoScanner
+        global MakeinfoBuilder, TexinfoScanner
 
-        if InfoBuilder is None:
-            InfoBuilder = SCons.Builder.Builder(action = '$MAKEINFOCOM',
+        if MakeinfoBuilder is None:
+            MakeinfoBuilder = SCons.Builder.Builder(action = '$MAKEINFOCOM',
                                                 source_scanner = TexinfoScanner,
                                                 emitter = info_emitter,
                                                 suffix = '.info',
                                                 src_suffix = ['.texi', '.texinfo'],
                                                 single_source = 1,
                                                 chdir = 1)
-        env['BUILDERS']['Info'] = InfoBuilder
+        env['BUILDERS']['Makeinfo'] = MakeinfoBuilder
 
 def exists(env):
     return env.Detect('makeinfo')
