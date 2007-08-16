@@ -57,7 +57,6 @@ def generate(env):
     env.SetDefault(
         MAKEINFO='makeinfo',
         MAKEINFOFLAGS='',
-        TEXINFOPATH=[],
         _MAKEINFOINCFLAGS='${_concat("-I", TEXINFOPATH, "", __env__, RDirs)}',
         MAKEINFOCOM='$MAKEINFO $_MAKEINFOINCFLAGS $MAKEINFOFLAGS ${SOURCE}',
         TEXINFOPATH=[]
