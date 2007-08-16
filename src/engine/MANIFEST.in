@@ -92,7 +92,6 @@ SCons/Tool/gcc.py
 SCons/Tool/gnulink.py
 SCons/Tool/gs.py
 SCons/Tool/header/__init__.py
-SCons/Tool/header/HeaderTests.py
 SCons/Tool/hpc++.py
 SCons/Tool/hpcc.py
 SCons/Tool/hplink.py
