@@ -1,0 +1,6 @@
+# -*- mode: Python -*-
+
+proj = Project('amhello', '1.0', 'maciekp@japhy.fnord.org',
+               header='config.h')
+proj.Distribute('configure.ac', 'Makefile.am', 'src/Makefile.am')
+proj.AutoInstall(Program('src/hello', 'src/main.c'))

@@ -1,0 +1,20 @@
+-*- text -*-
+
+This directory contains example SConstruct files that demonstrate
+Project API, whose aim is to model Automake's behaviour.
+
+
+SConstruct.amhello -- SConstruct file for Automake's `hello, world'
+project.  
+
+Sources for actual code:
+  $ cvs -d:pserver:anonymous@cvs.sv.gnu.org:/sources/automake co automake/doc/amhello amhello
+
+
+SConstruct.fetchmail -- SConstruct file for Fetchmail POP3 and IMAP
+client.
+
+Sources for actual code:
+  $ svn get http://mknod.org/svn/fetchmail/trunk/ fetchmail
+
+
