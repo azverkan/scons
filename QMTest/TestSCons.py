@@ -38,13 +38,17 @@ from TestCommon import __all__
 
 # Some tests which verify that SCons has been packaged properly need to
 # look for specific version file names.  Replicating the version number
-# here provides independent verification that what we packaged conforms
-# to what we expect.  (If we derived the version number from the same
-# data driving the build we might miss errors if the logic breaks.)
+# here provides some independent verification that what we packaged
+# conforms to what we expect.
 
-SConsVersion = '0.97'
+default_version = '0.97.0'
+
+SConsVersion = '__VERSION__'
+if SConsVersion == '__' + 'VERSION' + '__':
+    SConsVersion = default_version
 
 __all__.extend([ 'TestSCons',
+                 'machine',
                  'python',
                  '_exe',
                  '_obj',
@@ -54,6 +58,23 @@ __all__.extend([ 'TestSCons',
                  'dll_',
                  '_dll'
                ])
+
+machine_map = {
+    'i686'  : 'i386',
+    'i586'  : 'i386',
+    'i486'  : 'i386',
+}
+
+try:
+    uname = os.uname
+except AttributeError:
+    # Windows doesn't have a uname() function.  We could use something like
+    # sys.platform as a fallback, but that's not really a "machine," so
+    # just leave it as None.
+    machine = None
+else:
+    machine = uname()[4]
+    machine = machine_map.get(machine, machine)
 
 python = python_executable
 _python_ = '"' + python_executable + '"'
@@ -80,7 +101,7 @@ def gccFortranLibs():
     for l in stderr.readlines():
         list = string.split(l)
         if len(list) > 3 and list[:2] == ['gcc', 'version']:
-            if list[2][:2] == '3.':
+            if list[2][:2] in ('3.', '4.'):
                 libs = ['frtbegin'] + libs
                 break
     return libs
@@ -167,6 +188,10 @@ class TestSCons(TestCommon):
         if not kw.has_key('workdir'):
             kw['workdir'] = ''
         apply(TestCommon.__init__, [self], kw)
+
+        import SCons.Node.FS
+        if SCons.Node.FS.default_fs is None:
+            SCons.Node.FS.default_fs = SCons.Node.FS.FS()
 
     def Environment(self, ENV=None, *args, **kw):
         """
@@ -274,44 +299,15 @@ class TestSCons(TestCommon):
         kw['match'] = self.match_re_dotall
         apply(self.run, [], kw)
 
-    def skip_test(self, message="Skipping test.\n"):
-        """Skips a test.
-
-        Proper test-skipping behavior is dependent on whether we're being
-        executed as part of development of a change under Aegis.
-
-        Technically, skipping a test is a NO RESULT, but Aegis will
-        treat that as a test failure and prevent the change from going
-        to the next step.  We don't want to force anyone using Aegis
-        to have to install absolutely every tool used by the tests,
-        so we actually report to Aegis that a skipped test has PASSED
-        so that the workflow isn't held up.
-        """
-        if message:
-            sys.stdout.write(message)
-            sys.stdout.flush()
-        devdir = os.popen("aesub '$dd' 2>/dev/null", "r").read()[:-1]
-        intdir = os.popen("aesub '$intd' 2>/dev/null", "r").read()[:-1]
-        if devdir and self._cwd[:len(devdir)] == devdir or \
-           intdir and self._cwd[:len(intdir)] == intdir:
-            # We're under the development directory for this change,
-            # so this is an Aegis invocation; pass the test (exit 0).
-            self.pass_test()
-        else:
-            # skip=1 means skip this function when showing where this
-            # result came from.  They only care about the line where the
-            # script called test.skip_test(), not the line number where
-            # we call test.no_result().
-            self.no_result(skip=1)
-
-    def diff_substr(self, expect, actual):
+    def diff_substr(self, expect, actual, prelen=20, postlen=40):
         i = 0
         for x, y in zip(expect, actual):
             if x != y:
                 return "Actual did not match expect at char %d:\n" \
                        "    Expect:  %s\n" \
                        "    Actual:  %s\n" \
-                       % (i, repr(expect[i-20:i+40]), repr(actual[i-20:i+40]))
+                       % (i, repr(expect[i-prelen:i+postlen]),
+                             repr(actual[i-prelen:i+postlen]))
             i = i + 1
         return "Actual matched the expected output???"
 
@@ -336,6 +332,51 @@ class TestSCons(TestCommon):
         x = string.replace(x, '<string>', file)
         x = string.replace(x, 'line 1,', 'line %s,' % line)
         return x
+
+    def normalize_pdf(self, s):
+        s = re.sub(r'/CreationDate \(D:[^)]*\)',
+                   r'/CreationDate (D:XXXX)', s)
+        s = re.sub(r'/ID \[<[0-9a-fA-F]*> <[0-9a-fA-F]*>\]',
+                   r'/ID [<XXXX> <XXXX>]', s)
+        s = re.sub(r'/(BaseFont|FontName) /[A-Z]{6}',
+                   r'/\1 /XXXXXX', s)
+        s = re.sub(r'/Length \d+ *\n/Filter /FlateDecode\n',
+                   r'/Length XXXX\n/Filter /FlateDecode\n', s)
+
+
+        try:
+            import zlib
+        except ImportError:
+            pass
+        else:
+            begin_marker = '/FlateDecode\n>>\nstream\n'
+            end_marker = 'endstream\nendobj'
+
+            encoded = []
+            b = string.find(s, begin_marker, 0)
+            while b != -1:
+                b = b + len(begin_marker)
+                e = string.find(s, end_marker, b)
+                encoded.append((b, e))
+                b = string.find(s, begin_marker, e + len(end_marker))
+
+            x = 0
+            r = []
+            for b, e in encoded:
+                r.append(s[x:b])
+                d = zlib.decompress(s[b:e])
+                d = re.sub(r'%%CreationDate: [^\n]*\n',
+                           r'%%CreationDate: 1970 Jan 01 00:00:00\n', d)
+                d = re.sub(r'%DVIPSSource:  TeX output \d\d\d\d\.\d\d\.\d\d:\d\d\d\d',
+                           r'%DVIPSSource:  TeX output 1970.01.01:0000', d)
+                d = re.sub(r'/(BaseFont|FontName) /[A-Z]{6}',
+                           r'/\1 /XXXXXX', d)
+                r.append(d)
+                x = e
+            r.append(s[x:])
+            s = string.join(r, '')
+
+        return s
 
     def java_ENV(self):
         """
@@ -384,6 +425,7 @@ for opt, arg in cmd_opts:
     else: opt_string = opt_string + ' ' + opt
 for a in args:
     contents = open(a, 'rb').read()
+    a = string.replace(a, '\\\\', '\\\\\\\\')
     subst = r'{ my_qt_symbol( "' + a + '\\\\n" ); }'
     if impl:
         contents = re.sub( r'#include.*', '', contents )
@@ -445,7 +487,11 @@ void my_qt_symbol(const char *arg) {
 
         self.write([dir, 'lib', 'SConstruct'], r"""
 env = Environment()
-env.SharedLibrary( 'myqt', 'my_qobject.cpp' )
+import sys
+if sys.platform == 'win32':
+    env.StaticLibrary( 'myqt', 'my_qobject.cpp' )
+else:
+    env.SharedLibrary( 'myqt', 'my_qobject.cpp' )
 """)
 
         self.run(chdir = self.workpath(dir, 'lib'),
@@ -712,6 +758,84 @@ print "self._msvs_versions =", str(env['MSVS']['VERSIONS'])
                 print repr(exp_stdout)
                 print "-----------------------------------------------------"
                 self.fail_test()
+
+    def get_python_version(self):
+        """
+        Returns the Python version (just so everyone doesn't have to
+        hand-code slicing the right number of characters).
+        """
+        # see also sys.prefix documentation
+        return sys.version[:3]
+
+    def get_platform_python(self):
+        """
+        Returns a path to a Python executable suitable for testing on
+        this platform.
+
+        Mac OS X has no static libpython for SWIG to link against,
+        so we have to link against Apple's framwork version.  However,
+        testing must use the executable version that corresponds to the
+        framework we link against, or else we get interpreter errors.
+        """
+        if sys.platform == 'darwin':
+            return '/System/Library/Frameworks/Python.framework/Versions/Current/bin/python'
+        else:
+            global python
+            return python
+
+    def get_quoted_platform_python(self):
+        """
+        Returns a quoted path to a Python executable suitable for testing on
+        this platform.
+
+        Mac OS X has no static libpython for SWIG to link against,
+        so we have to link against Apple's framwork version.  However,
+        testing must use the executable version that corresponds to the
+        framework we link against, or else we get interpreter errors.
+        """
+        if sys.platform == 'darwin':
+            return '"' + self.get_platform_python() + '"'
+        else:
+            global _python_
+            return _python_
+
+    def get_platform_sys_prefix(self):
+        """
+        Returns a "sys.prefix" value suitable for linking on this platform.
+
+        Mac OS X has a built-in Python but no static libpython,
+        so we must link to it using Apple's 'framework' scheme.
+        """
+        if sys.platform == 'darwin':
+            fmt = '/System/Library/Frameworks/Python.framework/Versions/%s/'
+            return fmt % self.get_python_version()
+        else:
+            return sys.prefix
+
+    def get_python_frameworks_flags(self):
+        """
+        Returns a FRAMEWORKSFLAGS value for linking with Python.
+
+        Mac OS X has a built-in Python but no static libpython,
+        so we must link to it using Apple's 'framework' scheme.
+        """
+        if sys.platform == 'darwin':
+            return '-framework Python'
+        else:
+            return ''
+
+    def get_python_inc(self):
+        """
+        Returns a path to the Python include directory.
+        """
+        try:
+            import distutils.sysconfig
+        except ImportError:
+            return os.path.join(self.get_platform_sys_prefix(),
+                                'include',
+                                'python' + self.get_python_version())
+        else:
+            return distutils.sysconfig.get_python_inc()
 
 # In some environments, $AR will generate a warning message to stderr
 # if the library doesn't previously exist and is being created.  One

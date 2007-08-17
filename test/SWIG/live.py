@@ -28,21 +28,11 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 Test SWIG behavior with a live, installed SWIG.
 """
 
+import os.path
 import string
 import sys
 
 import TestSCons
-
-if sys.platform =='darwin':
-    # change to make it work with stock OS X python framework
-    # we can't link to static libpython because there isn't one on OS X
-    # so we link to a framework version. However, testing must also
-    # use the same version, or else you get interpreter errors.
-    python = "/System/Library/Frameworks/Python.framework/Versions/Current/bin/python"
-    _python_ = '"' + python + '"'
-else:
-    python = TestSCons.python
-    _python_ = TestSCons._python_
 
 # swig-python expects specific filenames.
 # the platform specific suffix won't necessarily work.
@@ -58,21 +48,22 @@ swig = test.where_is('swig')
 if not swig:
     test.skip_test('Can not find installed "swig", skipping test.\n')
 
+python = test.get_platform_python()
+_python_ = test.get_quoted_platform_python()
 
 
-version = sys.version[:3] # see also sys.prefix documentation
 
 # handle testing on other platforms:
 ldmodule_prefix = '_'
 
-frameworks = ''
-platform_sys_prefix = sys.prefix
-if sys.platform == 'darwin':
-    # OS X has a built-in Python but no static libpython
-    # so you should link to it using apple's 'framework' scheme.
-    # (see top of file for further explanation)
-    frameworks = '-framework Python'
-    platform_sys_prefix = '/System/Library/Frameworks/Python.framework/Versions/%s/' % version
+python_include_dir = test.get_python_inc()
+
+Python_h = os.path.join(python_include_dir, 'Python.h')
+
+if not os.path.exists(Python_h):
+    test.skip_test('Can not find %s, skipping test.\n' % Python_h)
+
+python_frameworks_flags = test.get_python_frameworks_flags()
     
 test.write("wrapper.py",
 """import os
@@ -84,11 +75,16 @@ os.system(string.join(sys.argv[1:], " "))
 
 test.write('SConstruct', """
 foo = Environment(SWIGFLAGS='-python',
-                  CPPPATH='%(platform_sys_prefix)s/include/python%(version)s/',
+                  CPPPATH='%(python_include_dir)s/',
                   LDMODULEPREFIX='%(ldmodule_prefix)s',
                   LDMODULESUFFIX='%(_dll)s',
-                  FRAMEWORKSFLAGS='%(frameworks)s',
+                  FRAMEWORKSFLAGS='%(python_frameworks_flags)s',
                   )
+
+import sys
+if sys.version[0] == '1':
+    # SWIG requires the -classic flag on pre-2.0 Python versions.
+    foo.Append(SWIGFLAGS = ' -classic')
 
 swig = foo.Dictionary('SWIG')
 bar = foo.Clone(SWIG = r'%(_python_)s wrapper.py ' + swig)
@@ -108,6 +104,12 @@ test.write("foo.i", """\
 %module foo
 %{
 /* Put header files here (optional) */
+/*
+ * This duplication shouldn't be necessary, I guess, but it seems
+ * to suppress "cast to pointer from integer of different size"
+ * warning messages on some systems.
+ */
+extern char *foo_string();
 %}
 
 extern char *foo_string();
@@ -125,6 +127,12 @@ test.write("bar.i", """\
 %module \t bar
 %{
 /* Put header files here (optional) */
+/*
+ * This duplication shouldn't be necessary, I guess, but it seems
+ * to suppress "cast to pointer from integer of different size"
+ * warning messages on some systems.
+ */
+extern char *bar_string();
 %}
 
 extern char *bar_string();

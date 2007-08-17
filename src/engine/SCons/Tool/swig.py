@@ -33,69 +33,48 @@ selection method.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+import os.path
+import re
+
 import SCons.Action
 import SCons.Defaults
+import SCons.Scanner
 import SCons.Tool
 import SCons.Util
-from SCons.Scanner import Scanner
-import os
-import re
 
 SwigAction = SCons.Action.Action('$SWIGCOM', '$SWIGCOMSTR')
 
 def swigSuffixEmitter(env, source):
-    if '-c++' in SCons.Util.CLVar(env.subst("$SWIGFLAGS")):
+    if '-c++' in SCons.Util.CLVar(env.subst("$SWIGFLAGS", source=source)):
         return '$SWIGCXXFILESUFFIX'
     else:
         return '$SWIGCFILESUFFIX'
 
-_reInclude = re.compile(r'%include\s+(\S+)')
 _reModule = re.compile(r'%module\s+(.+)')
 
-def recurse(path, searchPath):
-    global _reInclude
-    f = open(path)
-    try: contents = f.read()
-    finally: f.close()
-
-    found = []
-    # Better code for when we drop Python 1.5.2.
-    #for m in _reInclude.finditer(contents):
-    #    fname = m.group(1)
-    for fname in _reInclude.findall(contents):
-        for dpath in searchPath:
-            absPath = os.path.join(dpath, fname)
-            if os.path.isfile(absPath):
-                found.append(absPath)
-                break
-
-    # Equivalent code for when we drop Python 1.5.2.
-    #for f in [f for f in found if os.path.splitext(f)[1] == ".i"]:
-    #    found += recurse(f, searchPath)
-    for f in filter(lambda f: os.path.splitext(f)[1] == ".i", found):
-        found = found + recurse(f, searchPath)
-    return found
-
-def _scanSwig(node, env, path):
-    r = recurse(str(node), [os.path.abspath(os.path.dirname(str(node))), os.path.abspath(os.path.join("include", "swig"))])
-    return r
-
 def _swigEmitter(target, source, env):
+    swigflags = env.subst("$SWIGFLAGS", target=target, source=source)
+    flags = SCons.Util.CLVar(swigflags)
     for src in source:
-        src = str(src)
-        mname = None
-        flags = SCons.Util.CLVar(env.subst("$SWIGFLAGS"))
+        src = str(src.rfile())
+        mnames = None
         if "-python" in flags and "-noproxy" not in flags:
-            f = open(src)
-            try:
-                for l in f.readlines():
-                    m = _reModule.match(l)
-                    if m:
-                        mname = m.group(1)
-            finally:
-                f.close()
-            if mname is not None:
-                target.append(mname + ".py")
+            if mnames is None:
+                mnames = _reModule.findall(open(src).read())
+            target.extend(map(lambda m: m + ".py", mnames))
+        if "-java" in flags:
+            if mnames is None:
+                mnames = _reModule.findall(open(src).read())
+            java_files = map(lambda m: [m + ".java", m + "JNI.java"], mnames)
+            java_files = SCons.Util.flatten(java_files)
+            outdir = env.subst('$SWIGOUTDIR', target=target, source=source)
+            if outdir:
+                 java_files = map(lambda j, o=outdir: os.path.join(o, j), java_files)
+            java_files = map(env.fs.File, java_files)
+            for jf in java_files:
+                t_from_s = lambda t, p, s, x: t.dir
+                SCons.Util.AddMethod(jf, t_from_s, 'target_from_source')
+            target.extend(java_files)
     return (target, source)
 
 def generate(env):
@@ -110,12 +89,28 @@ def generate(env):
     cxx_file.add_action('.i', SwigAction)
     cxx_file.add_emitter('.i', _swigEmitter)
 
+    java_file = SCons.Tool.CreateJavaFileBuilder(env)
+
+    java_file.suffix['.i'] = swigSuffixEmitter
+
+    java_file.add_action('.i', SwigAction)
+    java_file.add_emitter('.i', _swigEmitter)
+
     env['SWIG']              = 'swig'
     env['SWIGFLAGS']         = SCons.Util.CLVar('')
     env['SWIGCFILESUFFIX']   = '_wrap$CFILESUFFIX'
     env['SWIGCXXFILESUFFIX'] = '_wrap$CXXFILESUFFIX'
-    env['SWIGCOM']           = '$SWIG $SWIGFLAGS -o $TARGET $SOURCES'
-    env.Append(SCANNERS=Scanner(function=_scanSwig, skeys=[".i"]))
+    env['_SWIGOUTDIR']       = '${"-outdir " + str(SWIGOUTDIR)}'
+    env['SWIGPATH']          = []
+    env['SWIGINCPREFIX']     = '-I'
+    env['SWIGINCSUFFIX']     = ''
+    env['_SWIGINCFLAGS']     = '$( ${_concat(SWIGINCPREFIX, SWIGPATH, SWIGINCSUFFIX, __env__, RDirs, TARGET, SOURCE)} $)'
+    env['SWIGCOM']           = '$SWIG -o $TARGET ${_SWIGOUTDIR} ${_SWIGINCFLAGS} $SWIGFLAGS $SOURCES'
+
+    expr = '^[ \t]*%[ \t]*(?:include|import|extern)[ \t]*(<|"?)([^>\s"]+)(?:>|"?)'
+    scanner = SCons.Scanner.ClassicCPP("SWIGScan", ".i", "SWIGPATH", expr)
+
+    env.Append(SCANNERS = scanner)
 
 def exists(env):
     return env.Detect(['swig'])

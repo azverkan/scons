@@ -70,6 +70,18 @@ def num(s, match):
 def within_tolerance(expected, actual, tolerance):
     return abs((expected-actual)/actual) <= tolerance
 
+def get_total_time(stdout):
+    return num(stdout, r'Total build time: (\d+\.\d+) seconds')
+
+def get_sconscript_time(stdout):
+    return num(stdout, r'Total SConscript file execution time: (\d+\.\d+) seconds')
+
+def get_scons_time(stdout):
+    return num(stdout, r'Total SCons execution time: (\d+\.\d+) seconds')
+
+def get_command_time(stdout):
+    return num(stdout, r'Total command execution time: (\d+\.\d+) seconds')
+
 
 
 # Try to make our results a little more accurate and repeatable by
@@ -99,12 +111,13 @@ expected_command_time = reduce(lambda x, y: x + y, times, 0.0)
 
 stdout = test.stdout()
 
-total_time      = num(stdout, r'Total build time: (\d+\.\d+) seconds')
-sconscript_time = num(stdout, r'Total SConscript file execution time: (\d+\.\d+) seconds')
-scons_time      = num(stdout, r'Total SCons execution time: (\d+\.\d+) seconds')
-command_time    = num(stdout, r'Total command execution time: (\d+\.\d+) seconds')
+total_time      = get_total_time(stdout)
+sconscript_time = get_sconscript_time(stdout)
+scons_time      = get_scons_time(stdout)
+command_time    = get_command_time(stdout)
 
 failures = []
+warnings = []
 
 if not within_tolerance(expected_command_time, command_time, 0.01):
     failures.append("""\
@@ -122,16 +135,29 @@ outside of the 1%% tolerance.
 """ % locals())
 
 if not within_tolerance(total_time, expected_total_time, 0.15):
-    failures.append("""\
-SCons -j1 reported total build time of %(total_time)s,
+    # This tolerance check seems empirically to work fine if there's
+    # a light load on the system, but on a heavily loaded system the
+    # timings get screwy and it can fail frequently.  Some obvious
+    # attempts to work around the problem didn't, so just treat it as
+    # a warning for now.
+    warnings.append("""\
+Warning:  SCons -j1 reported total build time of %(total_time)s,
 but the actual measured build time was %(expected_total_time)s
 (end-to-end time of %(complete_time)s less Python overhead of %(overhead)s),
 outside of the 15%% tolerance.
 """ % locals())
 
+if failures or warnings:
+    print string.join([test.stdout()] + failures + warnings, '\n')
 if failures:
-    print string.join([test.stdout()] + failures, '\n')
     test.fail_test(1)
+
+test.run(arguments = "--debug=time . SLEEP=0")
+
+command_time = get_command_time(test.stdout())
+if command_time != 0.0:
+    print "Up-to-date run received non-zero command time of %s" % command_time
+    test.fail_test()
 
 
 
@@ -143,10 +169,10 @@ test.run(arguments = "-j4 --debug=time . SLEEP=1")
 
 stdout = test.stdout()
 
-total_time      = num(stdout, r'Total build time: (\d+\.\d+) seconds')
-sconscript_time = num(stdout, r'Total SConscript file execution time: (\d+\.\d+) seconds')
-scons_time      = num(stdout, r'Total SCons execution time: (\d+\.\d+) seconds')
-command_time    = num(stdout, r'Total command execution time: (\d+\.\d+) seconds')
+total_time      = get_total_time(stdout)
+sconscript_time = get_sconscript_time(stdout)
+scons_time      = get_scons_time(stdout)
+command_time    = get_command_time(stdout)
 
 failures = []
 
@@ -161,6 +187,13 @@ outside of the 1%% tolerance.
 if failures:
     print string.join([test.stdout()] + failures, '\n')
     test.fail_test(1)
+
+test.run(arguments = "-j4 --debug=time . SLEEP=1")
+
+command_time = get_command_time(test.stdout())
+if command_time != 0.0:
+    print "Up-to-date run received non-zero command time of %s" % command_time
+    test.fail_test()
 
 
 test.pass_test()

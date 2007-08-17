@@ -6,7 +6,7 @@ construction information to the build engine.
 
 Keyword arguments supplied when the construction Environment
 is created are construction variables used to initialize the
-Environment 
+Environment
 """
 
 #
@@ -67,31 +67,12 @@ _null = _Null
 CleanTargets = {}
 CalculatorArgs = {}
 
+semi_deepcopy = SCons.Util.semi_deepcopy
+
 # Pull UserError into the global name space for the benefit of
 # Environment().SourceSignatures(), which has some import statements
 # which seem to mess up its ability to reference SCons directly.
 UserError = SCons.Errors.UserError
-
-def installFunc(target, source, env):
-    """Install a source file into a target using the function specified
-    as the INSTALL construction variable."""
-    try:
-        install = env['INSTALL']
-    except KeyError:
-        raise SCons.Errors.UserError('Missing INSTALL construction variable.')
-    return install(target[0].path, source[0].path, env)
-
-def installString(target, source, env):
-    s = env.get('INSTALLSTR', '')
-    if callable(s):
-        return s(target[0].path, source[0].path, env)
-    else:
-        return env.subst_target_source(s, 0, target, source)
-
-installAction = SCons.Action.Action(installFunc, installString)
-
-InstallBuilder = SCons.Builder.Builder(action=installAction,
-                                       name='InstallBuilder')
 
 def alias_builder(env, target, source):
     pass
@@ -102,23 +83,6 @@ AliasBuilder = SCons.Builder.Builder(action = alias_builder,
                                      multi = 1,
                                      is_explicit = None,
                                      name='AliasBuilder')
-
-def our_deepcopy(x):
-   """deepcopy lists and dictionaries, and just copy the reference
-   for everything else."""
-   if SCons.Util.is_Dict(x):
-       copy = {}
-       for key in x.keys():
-           copy[key] = our_deepcopy(x[key])
-   elif SCons.Util.is_List(x):
-       copy = map(our_deepcopy, x)
-       try:
-           copy = x.__class__(copy)
-       except AttributeError:
-           pass
-   else:
-       copy = x
-   return copy
 
 def apply_tools(env, tools, toolpath):
     # Store the toolpath in the Environment.
@@ -143,7 +107,7 @@ reserved_construction_var_names = \
     ['TARGET', 'TARGETS', 'SOURCE', 'SOURCES']
 
 def copy_non_reserved_keywords(dict):
-    result = our_deepcopy(dict)
+    result = semi_deepcopy(dict)
     for k in result.keys():
         if k in reserved_construction_var_names:
             SCons.Warnings.warn(SCons.Warnings.ReservedVariableWarning,
@@ -212,6 +176,9 @@ class BuilderDict(UserDict):
         self.env = env
         UserDict.__init__(self, dict)
 
+    def __semi_deepcopy__(self):
+        return self.__class__(self.data, self.env)
+
     def __setitem__(self, item, val):
         UserDict.__setitem__(self, item, val)
         try:
@@ -276,7 +243,7 @@ class SubstitutionEnvironment:
         """Initialization of an underlying SubstitutionEnvironment class.
         """
         if __debug__: logInstanceCreation(self, 'Environment.SubstitutionEnvironment')
-        self.fs = SCons.Node.FS.default_fs or SCons.Node.FS.FS()
+        self.fs = SCons.Node.FS.get_default_fs()
         self.ans = SCons.Node.Alias.default_ans
         self.lookup_list = SCons.Node.arg2nodes_lookups
         self._dict = kw.copy()
@@ -370,7 +337,7 @@ class SubstitutionEnvironment:
                         nodes.append(v)
             else:
                 nodes.append(v)
-    
+
         return nodes
 
     def gvars(self):
@@ -717,6 +684,17 @@ class SubstitutionEnvironment:
             self[key] = t
         return self
 
+# Used by the FindSourceFiles() method, below.
+# Stuck here for support of pre-2.2 Python versions.
+def build_source(ss, result):
+    for s in ss:
+        if isinstance(s, SCons.Node.FS.Dir):
+            build_source(s.all_children(), result)
+        elif s.has_builder():
+            build_source(s.sources, result)
+        elif isinstance(s.disambiguate(), SCons.Node.FS.File):
+            result.append(s)
+
 class Base(SubstitutionEnvironment):
     """Base class for "real" construction Environments.  These are the
     primary objects used to communicate dependency and construction
@@ -764,10 +742,10 @@ class Base(SubstitutionEnvironment):
         """
         if __debug__: logInstanceCreation(self, 'Environment.Base')
         self._memo = {}
-        self.fs = SCons.Node.FS.default_fs or SCons.Node.FS.FS()
+        self.fs = SCons.Node.FS.get_default_fs()
         self.ans = SCons.Node.Alias.default_ans
         self.lookup_list = SCons.Node.arg2nodes_lookups
-        self._dict = our_deepcopy(SCons.Defaults.ConstructionEnvironment)
+        self._dict = semi_deepcopy(SCons.Defaults.ConstructionEnvironment)
         self._init_special()
 
         self._dict['BUILDERS'] = BuilderDict(self._dict['BUILDERS'], self)
@@ -835,6 +813,14 @@ class Base(SubstitutionEnvironment):
             c = SCons.Defaults.DefaultEnvironment().get_calculator()
         return c
 
+    def get_CacheDir(self):
+        try:
+            return self._CacheDir
+        except AttributeError:
+            cd = SCons.Defaults.DefaultEnvironment()._CacheDir
+            self._CacheDir = cd
+            return cd
+
     def get_factory(self, factory, default='File'):
         """Return a factory function for creating Nodes for this
         construction environment.
@@ -895,7 +881,7 @@ class Base(SubstitutionEnvironment):
         self._memo['_gsm'] = result
 
         return result
-        
+
     def get_scanner(self, skey):
         """Find the appropriate scanner given a key (usually a file suffix).
         """
@@ -990,7 +976,11 @@ class Base(SubstitutionEnvironment):
                         try:
                             update_dict(val)
                         except (AttributeError, TypeError, ValueError):
-                            orig[val] = None
+                            if SCons.Util.is_Dict(val):
+                                for k, v in val.items():
+                                    orig[k] = v
+                            else:
+                                orig[val] = None
         self.scanner_map_delete(kw)
 
     def AppendENVPath(self, name, newpath, envname = 'ENV', sep = os.pathsep):
@@ -1006,7 +996,7 @@ class Base(SubstitutionEnvironment):
             orig = self._dict[envname][name]
 
         nv = SCons.Util.AppendPath(orig, newpath, sep)
-            
+
         if not self._dict.has_key(envname):
             self._dict[envname] = {}
 
@@ -1049,7 +1039,7 @@ class Base(SubstitutionEnvironment):
         objects in the original Environment.
         """
         clone = copy.copy(self)
-        clone._dict = our_deepcopy(self._dict)
+        clone._dict = semi_deepcopy(self._dict)
         try:
             cbd = clone._dict['BUILDERS']
             clone._dict['BUILDERS'] = BuilderDict(cbd, clone)
@@ -1122,7 +1112,7 @@ class Base(SubstitutionEnvironment):
 
         for path in paths:
             dir,name = os.path.split(str(path))
-            if name[:len(prefix)] == prefix and name[-len(suffix):] == suffix: 
+            if name[:len(prefix)] == prefix and name[-len(suffix):] == suffix:
                 return path
 
     def ParseConfig(self, command, function=None, unique=1):
@@ -1245,7 +1235,11 @@ class Base(SubstitutionEnvironment):
                         try:
                             update_dict(val)
                         except (AttributeError, TypeError, ValueError):
-                            orig[val] = None
+                            if SCons.Util.is_Dict(val):
+                                for k, v in val.items():
+                                    orig[k] = v
+                            else:
+                                orig[val] = None
         self.scanner_map_delete(kw)
 
     def PrependENVPath(self, name, newpath, envname = 'ENV', sep = os.pathsep):
@@ -1261,7 +1255,7 @@ class Base(SubstitutionEnvironment):
             orig = self._dict[envname][name]
 
         nv = SCons.Util.PrependPath(orig, newpath, sep)
-            
+
         if not self._dict.has_key(envname):
             self._dict[envname] = {}
 
@@ -1300,13 +1294,13 @@ class Base(SubstitutionEnvironment):
         with new construction variables and/or values.
         """
         try:
-            kwbd = our_deepcopy(kw['BUILDERS'])
+            kwbd = semi_deepcopy(kw['BUILDERS'])
             del kw['BUILDERS']
             self.__setitem__('BUILDERS', kwbd)
         except KeyError:
             pass
         kw = copy_non_reserved_keywords(kw)
-        self._update(our_deepcopy(kw))
+        self._update(semi_deepcopy(kw))
         self.scanner_map_delete(kw)
 
     def ReplaceIxes(self, path, old_prefix, old_suffix, new_prefix, new_suffix):
@@ -1480,7 +1474,11 @@ class Base(SubstitutionEnvironment):
         return apply(SCons.Builder.Builder, [], nkw)
 
     def CacheDir(self, path):
-        self.fs.CacheDir(self.subst(path))
+        import SCons.CacheDir
+        if path is None:
+            self._CacheDir = SCons.CacheDir.Null()
+        else:
+            self._CacheDir = SCons.CacheDir.CacheDir(self.subst(path))
 
     def Clean(self, targets, files):
         global CleanTargets
@@ -1593,50 +1591,6 @@ class Base(SubstitutionEnvironment):
             t.add_ignore(dlist)
         return tlist
 
-    def Install(self, dir, source):
-        """Install specified files in the given directory."""
-        try:
-            dnodes = self.arg2nodes(dir, self.fs.Dir)
-        except TypeError:
-            fmt = "Target `%s' of Install() is a file, but should be a directory.  Perhaps you have the Install() arguments backwards?"
-            raise SCons.Errors.UserError, fmt % str(dir)
-        try:
-            sources = self.arg2nodes(source, self.fs.Entry)
-        except TypeError:
-            if SCons.Util.is_List(source):
-                s = repr(map(str, source))
-            else:
-                s = str(source)
-            fmt = "Source `%s' of Install() is neither a file nor a directory.  Install() source must be one or more files or directories"
-            raise SCons.Errors.UserError, fmt % s
-        tgt = []
-        for dnode in dnodes:
-            for src in sources:
-                # Prepend './' so the lookup doesn't interpret an initial
-                # '#' on the file name portion as meaning the Node should
-                # be relative to the top-level SConstruct directory.
-                target = self.fs.Entry('.'+os.sep+src.name, dnode)
-                tgt.extend(InstallBuilder(self, target, src))
-        return tgt
-
-    def InstallAs(self, target, source):
-        """Install sources as targets."""
-        sources = self.arg2nodes(source, self.fs.Entry)
-        targets = self.arg2nodes(target, self.fs.Entry)
-        if len(sources) != len(targets):
-            if not SCons.Util.is_List(target):
-                target = [target]
-            if not SCons.Util.is_List(source):
-                source = [source]
-            t = repr(map(str, target))
-            s = repr(map(str, source))
-            fmt = "Target (%s) and source (%s) lists of InstallAs() must be the same length."
-            raise SCons.Errors.UserError, fmt % (t, s)
-        result = []
-        for src, tgt in map(lambda x, y: (x, y), sources, targets):
-            result.extend(InstallBuilder(self, tgt, src))
-        return result
-
     def Literal(self, string):
         return SCons.Subst.Literal(string)
 
@@ -1681,7 +1635,7 @@ class Base(SubstitutionEnvironment):
         SCons.SConsign.File(name, dbm_module)
 
     def SideEffect(self, side_effect, target):
-        """Tell scons that side_effects are built as side 
+        """Tell scons that side_effects are built as side
         effects of building targets."""
         side_effects = self.arg2nodes(side_effect, self.fs.Entry)
         targets = self.arg2nodes(target, self.fs.Entry)
@@ -1752,6 +1706,39 @@ class Base(SubstitutionEnvironment):
         """
         """
         return SCons.Node.Python.Value(value, built_value)
+
+    def FindSourceFiles(self, node='.'):
+        """ returns a list of all source files.
+        """
+        node = self.arg2nodes(node, self.fs.Entry)[0]
+
+        sources = []
+        # Uncomment this and get rid of the global definition when we
+        # drop support for pre-2.2 Python versions.
+        #def build_source(ss, result):
+        #    for s in ss:
+        #        if isinstance(s, SCons.Node.FS.Dir):
+        #            build_source(s.all_children(), result)
+        #        elif s.has_builder():
+        #            build_source(s.sources, result)
+        #        elif isinstance(s.disambiguate(), SCons.Node.FS.File):
+        #            result.append(s)
+        build_source(node.all_children(), sources)
+
+        # now strip the build_node from the sources by calling the srcnode
+        # function
+        def get_final_srcnode(file):
+            srcnode = file.srcnode()
+            while srcnode != file.srcnode():
+                srcnode = file.srcnode()
+            return srcnode
+
+        # get the final srcnode for all nodes, this means stripping any
+        # attached build node.
+        map( get_final_srcnode, sources )
+
+        # remove duplicates
+        return list(set(sources))
 
 class OverrideEnvironment(Base):
     """A proxy that overrides variables in a wrapped construction
@@ -1851,7 +1838,7 @@ class OverrideEnvironment(Base):
     # Overridden public construction environment methods.
     def Replace(self, **kw):
         kw = copy_non_reserved_keywords(kw)
-        self.__dict__['overrides'].update(our_deepcopy(kw))
+        self.__dict__['overrides'].update(semi_deepcopy(kw))
 
 # The entry point that will be used by the external world
 # to refer to a construction environment.  This allows the wrapper
