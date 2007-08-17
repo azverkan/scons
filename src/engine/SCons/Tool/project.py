@@ -35,67 +35,83 @@ import sys
 from distutils import sysconfig
 
 import SCons.Node.FS
+import SCons.Script.Main
 import SCons.Tool.header
 import SCons.Tool.packaging
 
 # Set of file names that are automatically distributed.
 auto_dist = ("INSTALL", "NEWS", "README", "AUTHORS", "ChangeLog", "THANKS", "HACKING", "COPYING")
 
+_standard_directory_hierarchy = {
+    'prefix' : "/usr/local",
+    'dataroot' : "${DIR.prefix}/share",
+    'data' : "${DIR.dataroot}",
+    'pkgdata' : "${DIR.data}/${NAME}", # not required by standard, Automake-specific
+    'doc' : "${DIR.dataroot}/doc/${NAME}",
+    'html' : "${DIR.doc}",
+    'dvi' : "${DIR.doc}",
+    'ps' : "${DIR.doc}",
+    'pdf' : "${DIR.doc}",
+    'info' : "${DIR.dataroot}/info",
+    'lisp' : "${DIR.dataroot}/emacs/site-lisp",
+    'locale' : "${DIR.dataroot}/locale",
+    'man' : "${DIR.dataroot}/man",
+    'man1' : "${DIR.man}/man1",
+    'man2' : "${DIR.man}/man2",
+    'man3' : "${DIR.man}/man3",
+    'man4' : "${DIR.man}/man4",
+    'man5' : "${DIR.man}/man5",
+    'man6' : "${DIR.man}/man6",
+    'man7' : "${DIR.man}/man7",
+    'man8' : "${DIR.man}/man8",
+    'man9' : "${DIR.man}/man9",
+    'manl' : "${DIR.man}/manl",
+    'mann' : "${DIR.man}/mann",
+    'sysconf' : "${DIR.prefix}/etc",
+    'sharedstate' : "${DIR.prefix}/com", # most distros set it to /var/lib
+    'pkgsharedstate' : "${DIR.sharedstate}/${NAME}", # not required by standard
+    'localstate' : "${DIR.prefix}/var",
+    'pkglocalstate' : "${DIR.localstate}/${NAME}", # not required by standard
+    'include' : "${DIR.prefix}/include",
+    'pkginclude' : "${DIR.include}/${NAME}", # not required by standard, Automake-specific
+    'exec_prefix' : "${DIR.prefix}",
+    'bin' : "${DIR.exec_prefix}/bin",
+    'sbin' : "${DIR.exec_prefix}/sbin",
+    'libexec' : "${DIR.exec_prefix}/libexec",
+    'pkglibexec' : "${DIR.libexec}/${NAME}", # not required by standard
+    'lib' : "${DIR.exec_prefix}/lib",
+    'pkglib' : "${DIR.exec_prefix}/lib/${NAME}", # not required by standard, Automake-specific
+    'oldinclude' : "/usr/include",
+    'pkgoldinclude' : "${DIR.oldinclude}/${NAME}", # not required by standard
+    'python' : sysconfig.get_python_lib(0,0,prefix=sys.prefix) # not required by standard,
+}
+
+_default_arch_dependent = (
+    'exec_prefix', 'bin', 'sbin', 'libexec', 'pkglibexec', 'lib', 'pkglib'
+    )
+
 class DirectoryHierarchy:
     """Installation directory hierarchy.
     """
     def __init__(self, **kw):
+        self.__arch_dependent = []
 
-        # Standard hierarchy
-        self.prefix = "/usr/local"
-        self.dataroot = "${DIR.prefix}/share"
-        self.data = "${DIR.dataroot}"
-        self.pkgdata = "${DIR.data}/${NAME}" # not required by standard, Automake-specific
-        self.doc = "${DIR.dataroot}/doc/${NAME}"
-        self.html = dvi = ps = pdf = "${DIR.doc}"
-        self.info = "${DIR.dataroot}/info"
-        self.lisp = "${DIR.dataroot}/emacs/site-lisp"
-        self.locale = "${DIR.dataroot}/locale"
-        self.man = "${DIR.dataroot}/man"
-        self.man1 = "${DIR.man}/man1"
-        self.man2 = "${DIR.man}/man2"
-        self.man3 = "${DIR.man}/man3"
-        self.man4 = "${DIR.man}/man4"
-        self.man5 = "${DIR.man}/man5"
-        self.man6 = "${DIR.man}/man6"
-        self.man7 = "${DIR.man}/man7"
-        self.man8 = "${DIR.man}/man8"
-        self.man9 = "${DIR.man}/man9"
-        self.manl = "${DIR.man}/manl"
-        self.mann = "${DIR.man}/mann"
-        self.sysconf = "${DIR.prefix}/etc"
-        self.sharedstate = "${DIR.prefix}/com" # most distros set it to /var/lib
-        self.pkgsharedstate = "${DIR.sharedstate}/${NAME}" # not required by standard
-        self.localstate = "${DIR.prefix}/var"
-        self.pkglocalstate = "${DIR.localstate}/${NAME}" # not required by standard
-        self.include = "${DIR.prefix}/include"
-        self.pkginclude = "${DIR.include}/${NAME}" # not required by standard, Automake-specific
-        self.exec_prefix = "${DIR.prefix}"
-        self.bin = "${DIR.exec_prefix}/bin"
-        self.sbin = "${DIR.exec_prefix}/sbin"
-        self.libexec = "${DIR.exec_prefix}/libexec"
-        self.pkglibexec = "${DIR.libexec}/${NAME}" # not required by standard
-        self.lib = "${DIR.exec_prefix}/lib"
-        self.pkglib = "${DIR.exec_prefix}/lib/${NAME}" # not required by standard, Automake-specific
-        self.oldinclude = "/usr/include"
-        self.pkgoldinclude = "${DIR.oldinclude}/${NAME}" # not required by standard
-        self.python = sysconfig.get_python_lib(0,0,prefix=sys.prefix) # not required by standard
+        directories = _standard_directory_hierarchy.copy()
+        directories.update(kw)
 
-        self.__arch_dependent = ['exec_prefix', 'bin', 'sbin', 'libexec', 'pkglibexec', 'lib', 'pkglib']
-
-        # Override from keyword arguments.
-        self.__dict__.update(kw)
+        for directory in directories:
+            self.DefineDirectory(directory, directories[directory],
+                                 directory in _default_arch_dependent)
 
     def is_arch_dependent(self, name):
         return name in self.__arch_dependent
 
-    def DefineDirectory(self, name, directory, arch_dependent=False):
-        self.setattr(name, directory)
+    def DefineDirectory(self, name, directory, arch_dependent=False, help=None):
+        # self.setattr(name, directory)
+        SCons.Script.Main.AddOption(
+            '--dir_'+name, action='store', type='string', dest='dir_'+name, default=directory,
+            metavar='DIRECTORY', help=help or '%s directory [%s]'%(name,directory))
+        setattr(self, name, SCons.Script.Main.GetOption('dir_'+name))
         if arch_dependent:
             self.__arch_dependent.append(name)
 
@@ -150,7 +166,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.tests = []
 
         self._setdefault(
-            DIR =  DirectoryHierarchy(),
+            DIR =  apply(DirectoryHierarchy, (), self.get('DIRECTORIES', {})),
             shortname = self['NAME'],
             TEST_ENVIRONMENT = {},
             TEST_COMMAND = '',
