@@ -29,8 +29,7 @@ import UserDict
 
 import SCons.Environment
 
-from SCons.Environment import Project
-from SCons.Project import *
+from SCons.Tool.project import *
 
 class DummyNode:
     """Simple node work-alike."""
@@ -64,33 +63,24 @@ class ProjectTestCase(unittest.TestCase):
         prj.Distribute('LICENSE')
         prj.Distribute('README-local', 'LICENSE-local')
 
-        prj.finish([env.File('SConstruct')])
+        prj.finish([])
 
         # Check assembling distribution
         distribution = map(str, prj.distribution)
         distribution.sort()
         assert distribution == ['LICENSE', 'LICENSE-local',
-                                'README', 'README-local',
-                                'SConstruct'], distribution
+                                'README', 'README-local'], \
+                                distribution
 
         # Does project stop being default?
         assert find_project() is None
 
-        # Check alias composition
-        for alias_name in ( 'dist', 'check', 'distcheck', 'all',
-                            'install-data', 'install-exec', 'install-init' ):
-            alias = env.arg2nodes(alias_name)
-            children = alias[0].children()
-            assert len(children) == 1, alias_name
-            assert str(children[0]) == alias_name+'-test', \
-                   (str(children[0]), alias_name)
-
-        alias = env.arg2nodes('install')
+        alias = env.arg2nodes('install-test')
         children = alias[0].children()
-        assert len(children)==3
+        assert len(children)==2, map(str, children)
         children_names = map(str, children)
         children_names.sort()
-        assert children_names == ['install-data','install-exec','install-init']
+        assert children_names == ['install-data-test','install-exec-test'], children_names
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(ProjectTestCase, 'test_')
