@@ -45,7 +45,7 @@ def _final_text(text):
     elif callable(text):
         return _final_text(text())
 
-    raise SCons.Errors.UserError("TODO/jph: Non-string text not supported yet.")
+    raise SCons.Errors.UserError("String or callable expected.")
 
 class HeaderFile(UserDict.UserDict):
     language = None
