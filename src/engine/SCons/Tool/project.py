@@ -379,7 +379,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             args = self['TEST_ARGS']
 
         for node in nodes:
-            cmd = self.env.Command('CHECK %s' % os.path.basename(node.abspath),
+            cmd = self.env.Command('CHECK %s' % node.name,
                                    [node] + self.Alias('all') + sources,
                                    TestCommandAction('$COMMAND ${SOURCE.abspath} $ARGS'),
                                    COMMAND=command,
