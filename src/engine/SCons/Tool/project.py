@@ -83,7 +83,7 @@ _standard_directory_hierarchy = {
     'pkglib' : "${DIR.exec_prefix}/lib/${NAME}", # not required by standard, Automake-specific
     'oldinclude' : "/usr/include",
     'pkgoldinclude' : "${DIR.oldinclude}/${NAME}", # not required by standard
-    'python' : sysconfig.get_python_lib(0,0,prefix=sys.prefix) # not required by standard,
+    'python' : sysconfig.get_python_lib(0,0,prefix='${DIR.prefix}') # not required by standard,
 }
 
 _default_arch_dependent = (
