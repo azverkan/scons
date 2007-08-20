@@ -255,7 +255,7 @@ class HeaderFile(UserDict.UserDict):
         self.Write(target[0].get_abspath())
 
     def _bld_emitter(self, target, source, env):
-        return target, source+[SCons.Node.Python.Value(time.time())] # FIXME
+        return target, source
 
     def _bld(self, env):
         """Return a Builder to build this header.
