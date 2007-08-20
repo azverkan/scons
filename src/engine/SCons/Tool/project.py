@@ -203,6 +203,9 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.env.Alias(self._my_alias('install'), self._my_alias('install-exec'))
         self.env.Alias(self._my_alias('install'), self._my_alias('install-init')) # FIXME
 
+        self.env.Depends(self.env.Alias(self._my_alias('check')),
+                         self.env.Alias(self._my_alias('all')))
+
         if not self.env.has_key('PROJECT'):
             self.env['PROJECT'] = self
 
