@@ -205,8 +205,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.env.Depends(self.env.Alias(self._my_alias('check')),
                          self.env.Alias(self._my_alias('all')))
 
-        if not self.env.has_key('PROJECT'):
-            self.env['PROJECT'] = self
+        self.env.Append(PROJECTS=[self])
 
     # Wrappers
     def Header(self, header=None, lang=None):
