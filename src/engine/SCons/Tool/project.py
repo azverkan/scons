@@ -198,6 +198,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.Alias('install', self.Alias('install-exec'))
 
         self.env.Append(PROJECTS=[self])
+        self.env.SetDefault(PROJECT=self.env['PROJECTS'][0])
 
     # Wrappers
     def Alias(self, alias, *args, **kwargs):
