@@ -42,6 +42,8 @@ import SCons.Util
 def _final_text(text):
     if SCons.Util.is_String(text):
         return text
+    elif callable(text):
+        return _final_text(text())
 
     raise SCons.Errors.UserError("TODO/jph: Non-string text not supported yet.")
 
@@ -170,7 +172,7 @@ class HeaderFile(UserDict.UserDict):
         return text
 
     def Comment(self, text, position=None, noinsert = False, nowrap=False):
-        text = string.strip(text)
+        text = string.strip(_final_text(text))
         if nowrap:
             text = string.split(text, "\n")
         else:
@@ -189,6 +191,7 @@ class HeaderFile(UserDict.UserDict):
 
     def Definition(self, name, value, comment=None, position=None,
                    noinsert=False, nowrap=False, verbatim=False):
+        name = _final_text(name)
         if not self.check_name(name):
             raise SCons.Errors.UserError("Invalid identifier.")
 
@@ -215,10 +218,14 @@ class HeaderFile(UserDict.UserDict):
             return self.Verbatim(text)
 
     def Template(self, name, comment, value=None, nodef=False):
+        name = _final_text(name)
+        comment = _final_text(comment)
+
         if not self.check_name(name):
             raise SCons.Errors.UserError("Invalid identifier.")
         if not self.check_comment_line(comment):
             raise SCons.Errors.UserError("Invalid comment.")
+ 
 
         self._descriptions[name] = comment
 
