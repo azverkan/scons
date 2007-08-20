@@ -143,9 +143,6 @@ class Project(SCons.Environment.SubstitutionEnvironment):
                 del kw[k]
         self._dict.update(kw)
 
-    def _my_alias(self, alias):
-        return '%s-%s' % (alias, self['NAME'])
-
     def __init__(self, env, **kw):
         """Project-specific initialisation.
 
@@ -194,20 +191,19 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         my_aliases = {}
         for alias in ('all', 'dist', 'check', 'distcheck',
                       'install', 'install-data', 'install-exec'):
-            my_alias = self.env.Alias(self._my_alias(alias))
+            my_alias = self.Alias(alias)
             self.env.Alias(alias, my_alias)
-            my_aliases[alias] = my_alias
 
-        self.env.Depends(my_aliases['install'], my_aliases['install-data'])
-        self.env.Depends(my_aliases['install'], my_aliases['install-exec'])
-        self.env.Depends(my_aliases['check'], my_aliases['all'])
-
-        self.env.Depends(self.env.Alias(self._my_alias('check')),
-                         self.env.Alias(self._my_alias('all')))
+        self.env.Depends(self.Alias('install'), self.Alias('install-data'))
+        self.env.Depends(self.Alias('install'), self.Alias('install-exec'))
+        self.env.Depends(self.Alias('check'), self.Alias('all'))
 
         self.env.Append(PROJECTS=[self])
 
     # Wrappers
+    def Alias(self, alias, *args, **kwargs):
+        return apply(self.env.Alias, ( '%s-%s' % (alias, self['NAME']), ) + args, kwargs)
+
     def Configure(self, *args, **kwargs):
         try:
             kwargs.setdefault(header=self['header'])
@@ -329,14 +325,14 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 
         for node in nodes:
             cmd = self.env.Command(str(node)+' test', # fake file name to make Command actually work
-                                   [node,self._my_alias('all')] + sources,
+                                   [node] + sources,
                                    '$COMMAND ${SOURCE.abspath} $ARGS',
                                    COMMAND=command,
                                    ARGS=args,
                                    ENV=environment)
             if distribute_sources:
                 self.add_dist_root(cmd)
-            self.env.Alias(self._my_alias('check'), cmd)
+            self.Alias('check', cmd)
             self.env.Ignore(cmd[0].dir, cmd)
 
         return nodes
