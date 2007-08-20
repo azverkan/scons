@@ -417,13 +417,14 @@ class Project(SCons.Environment.SubstitutionEnvironment):
                 install = 'pkgdata'
 
         tdir = self.subst(install)
+        arch_dependent = kw.get('arch_dependent', None)
         if not os.path.isabs(tdir):
+            if not arch_dependent:
+                arch_dependent = self['DIR'].is_arch_dependent(tdir)
             tdir = self.subst(getattr(self['DIR'], tdir))
-            arch_dependent = kw.get('arch_dependent')
-            if arch_dependent is None:
-                raise SCons.Errors.UserError('When specifying full absolute installation path, you need to specify arch_dependent argument that is not None (%s)', node)
         else:
-            arch_dependent = kw.get('arch_dependent', self['DIR'].is_arch_dependent(tdir))
+            if not arch_dependent:
+                raise SCons.Errors.UserError('When specifying full absolute installation path, you need to specify arch_dependent argument that is not None (%s)' % node)
 
         t = self.env.Install(tdir, node)
         if arch_dependent:
