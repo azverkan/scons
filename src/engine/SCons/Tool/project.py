@@ -280,7 +280,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         
         package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
-        self.env.Alias('dist-'+self['NAME'], package)
+        self.env.Alias('dist', package)
 
         self.finished = True
         _all_projects.remove(self)
