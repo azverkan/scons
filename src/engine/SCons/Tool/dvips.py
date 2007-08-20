@@ -52,7 +52,9 @@ def generate(env):
                                           prefix = '$PSPREFIX',
                                           suffix = '$PSSUFFIX',
                                           src_suffix = '.dvi',
-                                          src_builder = 'DVI')
+                                          src_builder = 'DVI',
+                                          autoinstall_keywords = {'install'        : 'doc',
+                                                                  })
 
     env['BUILDERS']['PostScript'] = PSBuilder
     

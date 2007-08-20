@@ -222,7 +222,10 @@ def createStaticLibBuilder(env):
                                            prefix = '$LIBPREFIX',
                                            suffix = '$LIBSUFFIX',
                                            src_suffix = '$OBJSUFFIX',
-                                           src_builder = 'StaticObject')
+                                           src_builder = 'StaticObject',
+                                           autoinstall_keywords = {'install'        : 'lib',
+                                                                   'arch_dependent' : True,
+                                                                   })
         env['BUILDERS']['StaticLibrary'] = static_lib
         env['BUILDERS']['Library'] = static_lib
 
@@ -247,7 +250,11 @@ def createSharedLibBuilder(env):
                                            suffix = '$SHLIBSUFFIX',
                                            target_scanner = ProgramScanner,
                                            src_suffix = '$SHOBJSUFFIX',
-                                           src_builder = 'SharedObject')
+                                           src_builder = 'SharedObject',
+                                           autoinstall_keywords = {'install'        : 'lib',
+                                                                   'arch_dependent' : True,
+                                                                   'executable'     : True,
+                                                                   })
         env['BUILDERS']['SharedLibrary'] = shared_lib
 
     return shared_lib
@@ -271,7 +278,11 @@ def createLoadableModuleBuilder(env):
                                           suffix = '$LDMODULESUFFIX',
                                           target_scanner = ProgramScanner,
                                           src_suffix = '$SHOBJSUFFIX',
-                                          src_builder = 'SharedObject')
+                                          src_builder = 'SharedObject',
+                                           autoinstall_keywords = {'install'        : 'pkglib',
+                                                                   'arch_dependent' : True,
+                                                                   'executable'     : True,
+                                                                   })
         env['BUILDERS']['LoadableModule'] = ld_module
 
     return ld_module
@@ -299,7 +310,10 @@ def createObjBuilders(env):
                                            suffix = '$OBJSUFFIX',
                                            src_builder = ['CFile', 'CXXFile'],
                                            source_scanner = SourceFileScanner,
-                                           single_source = 1)
+                                           single_source = 1,
+                                           autoinstall_keywords = {'install'        : 'pkglib',
+                                                                   'arch_dependent' : True,
+                                                                   })
         env['BUILDERS']['StaticObject'] = static_obj
         env['BUILDERS']['Object'] = static_obj
 
@@ -312,7 +326,11 @@ def createObjBuilders(env):
                                            suffix = '$SHOBJSUFFIX',
                                            src_builder = ['CFile', 'CXXFile'],
                                            source_scanner = SourceFileScanner,
-                                           single_source = 1)
+                                           single_source = 1,
+                                           autoinstall_keywords = {'install'        : 'pkglib',
+                                                                   'arch_dependent' : True,
+                                                                   'executable'     : True,
+                                                                   })
         env['BUILDERS']['SharedObject'] = shared_obj
 
     return (static_obj, shared_obj)

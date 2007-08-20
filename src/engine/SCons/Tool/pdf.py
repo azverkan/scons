@@ -45,7 +45,9 @@ def generate(env):
                                                prefix = '$PDFPREFIX',
                                                suffix = '$PDFSUFFIX',
                                                emitter = {},
-                                               source_ext_match = None)
+                                               source_ext_match = None,
+                                               autoinstall_keywords = {'install'        : 'doc',
+                                                                       })
         env['BUILDERS']['PDF'] = PDFBuilder
 
     env['PDFPREFIX'] = ''
