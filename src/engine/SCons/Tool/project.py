@@ -34,10 +34,26 @@ import os.path
 import sys
 from distutils import sysconfig
 
+import SCons.Action
 import SCons.Node.FS
 import SCons.Script.Main
 import SCons.Tool.header
 import SCons.Tool.packaging
+
+class TestCommandAction(SCons.Action.CommandAction):
+  """Specialized Action class for running tests"""
+  def process(self, target, source, env):
+      result, ignore, silent = SCons.Action.CommandAction.process(self, target, source, env)
+      return result, ignore, 1
+
+  def execute(self, target, source, env):
+      print str(target[0])+'...',
+      rv = SCons.Action.CommandAction.execute(self, target, source, env)
+      if rv in (0, 77):
+          print 'PASS'
+          return 0
+      print 'FAIL'
+      return rv
 
 # Set of file names that are automatically distributed.
 auto_dist = ("INSTALL", "NEWS", "README", "AUTHORS", "ChangeLog", "THANKS", "HACKING", "COPYING")
@@ -362,7 +378,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         for node in nodes:
             cmd = self.env.Command('CHECK %s' % os.path.basename(node.abspath),
                                    [node] + self.Alias('all') + sources,
-                                   '$COMMAND ${SOURCE.abspath} $ARGS',
+                                   TestCommandAction('$COMMAND ${SOURCE.abspath} $ARGS'),
                                    COMMAND=command,
                                    ARGS=args,
                                    ENV=environment)
