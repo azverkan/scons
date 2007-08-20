@@ -121,17 +121,17 @@ def Package(env, target=None, source=None, **kw):
     # now try to setup the default_target and the default PACKAGEROOT
     # arguments.
     try:
+        if not kw.has_key('PACKAGEROOT'):
+            kw['PACKAGEROOT']="%(NAME)s-%(VERSION)s"%kw
+
         # fill up the target list with a default target name until the PACKAGETYPE
         # list is of the same size as the target list.
         if target==None or target==[]:
-            target=["%(NAME)s-%(VERSION)s"%kw]
+            target=[kw["PACKAGEROOT"]]
 
         size_diff=len(PACKAGETYPE)-len(target)
         if size_diff>0:
             target.extend([target]*size_diff)
-
-        if not kw.has_key('PACKAGEROOT'):
-            kw['PACKAGEROOT']="%(NAME)s-%(VERSION)s"%kw
 
     except KeyError, e:
         raise SCons.Errors.UserError( "Missing PackageTag '%s'"%e.args[0] )
