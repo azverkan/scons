@@ -190,21 +190,17 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             if f.rexists():
                 self.distribution.append(f)
 
+        # Prepare aliases
+        my_aliases = {}
         for alias in ('all', 'dist', 'check', 'distcheck',
-                      'install-data', 'install-exec', 'install-init'):
-            self.env.Alias(self._my_alias(alias))
-            self.env.Alias(alias, self._my_alias(alias))
+                      'install', 'install-data', 'install-exec'):
+            my_alias = self.env.Alias(self._my_alias(alias))
+            self.env.Alias(alias, my_alias)
+            my_aliases[alias] = my_alias
 
-        self.env.Alias('install','install-data')
-        self.env.Alias('install','install-exec')
-        self.env.Alias('install','install-init') # FIXME
-
-        self.env.Alias(self._my_alias('install'), self._my_alias('install-data'))
-        self.env.Alias(self._my_alias('install'), self._my_alias('install-exec'))
-        self.env.Alias(self._my_alias('install'), self._my_alias('install-init')) # FIXME
-
-        self.env.Depends(self.env.Alias(self._my_alias('check')),
-                         self.env.Alias(self._my_alias('all')))
+        self.env.Depends(my_aliases['install'], my_aliases['install-data'])
+        self.env.Depends(my_aliases['install'], my_aliases['install-exec'])
+        self.env.Depends(my_aliases['check'], my_aliases['all'])
 
         if not self.env.has_key('PROJECT'):
             self.env['PROJECT'] = self
