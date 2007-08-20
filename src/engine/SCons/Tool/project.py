@@ -50,10 +50,13 @@ class TestCommandAction(SCons.Action.CommandAction):
   def execute(self, target, source, env):
       print str(target[0])+'...',
       rv = SCons.Action.CommandAction.execute(self, target, source, env)
-      if rv in (0, 77):
+      if rv == 0:
           print 'PASS'
-          return 0
-      print 'FAIL'
+      elif rv == 77:
+          print 'IGNORE'
+          rv = 0                        # return success
+      else:
+          print 'FAIL'
       return rv
 
 # Set of file names that are automatically distributed.
