@@ -169,6 +169,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             TEST_COMMAND = '',
             TEST_ARGS = '',
             DIST_TYPE = 'src_targz',
+            DISTCHECK_SUBDIR = '_distcheck',
 
             # Autotools compatibility
             PACKAGE = self['NAME'],
@@ -278,10 +279,45 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = self['DIST_TYPE']
-        
+        if self['VERSION']:
+            pkg_kw['PACKAGEROOT'] = '%s-%s' % (self['NAME'], self['VERSION'])
+        else:
+            pkg_kw['PACKAGEROOT'] = self['NAME']
+
         package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
         self.env.Alias('dist', package)
+
+        self.Alias('distcheck', self.env.Command(
+            'DISTRIBUTION CHECK', package,
+            ['mkdir $SUBDIR $SUBDIR/_build || { echo "*** PLEASE REMOVE $SUBDIR" ; exit 1; }',
+             'tar -C $SUBDIR -xf ${SOURCE.abspath}', # Unpack original distribution
+             '$SCONSCOM check',         # Build and run tests
+
+             # Install, uninstall, check uninstalling
+             '$SCONSCOM --dir_prefix=${SUBDIR.abspath}/_install install',
+             '$SCONSCOM --dir_prefix=${SUBDIR.abspath}/_install -c install',
+             'test -z `find ${SUBDIR.abspath}/_install -type f`',
+
+             # Create second distribution and compare it to original
+             '$SCONSCOM dist',
+             'tar -tvf $SUBDIR/_build/${SOURCE.file} |sort > $SUBDIR/second_files',
+             'tar -tvf $SOURCE |sort > $SUBDIR/first_files',
+             'diff -s $SUBDIR/first_files $SUBDIR/second_files',
+
+             # clean and test (FIXME:sconsign file name)
+             '$SCONSCOM -c',
+             "test -z `find ${SUBDIR.abspath}/_build -type f -not -name '.sconsign.*'`",
+
+             # Clean after testing
+             'rm -rf $SUBDIR'
+             ],
+            SCONS=self.get('SCONS', 'scons'),
+            SCONSOPTS=['-C', '$SUBDIR/_build', '-Y', '${SUBDIR.abspath}/$PACKAGEROOT'],
+            SCONSCOM='$SCONS $SCONSOPTS',
+            SUBDIR=self.env.Dir(self['DISTCHECK_SUBDIR']),
+            PACKAGEROOT=pkg_kw['PACKAGEROOT'],
+            ))
 
         self.finished = True
         _all_projects.remove(self)
