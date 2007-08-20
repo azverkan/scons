@@ -223,9 +223,6 @@ class HeaderFile(UserDict.UserDict):
 
         if not self.check_name(name):
             raise SCons.Errors.UserError("Invalid identifier.")
-        if not self.check_comment_line(comment):
-            raise SCons.Errors.UserError("Invalid comment.")
- 
 
         self._descriptions[name] = comment
 
