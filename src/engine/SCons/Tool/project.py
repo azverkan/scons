@@ -208,6 +208,14 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.env.Append(PROJECTS=[self])
 
     # Wrappers
+    def Configure(self, *args, **kwargs):
+        try:
+            kwargs.setdefault(header=self['header'])
+        except KeyError:
+            # everything is right, project does not have Header assocated yet.
+            pass
+        return apply(self.env.Configure, args, kwargs)
+
     def Header(self, header=None, lang=None):
         if header is None:
             return self['header']
