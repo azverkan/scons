@@ -417,7 +417,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
                 install = 'pkgdata'
 
         tdir = self.subst(install)
-        if not os.path.isabs(install):
+        if not os.path.isabs(tdir):
             tdir = self.subst(getattr(self['DIR'], tdir))
             arch_dependent = kw.get('arch_dependent')
             if arch_dependent is None:
