@@ -194,9 +194,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             my_alias = self.Alias(alias)
             self.env.Alias(alias, my_alias)
 
-        self.env.Depends(self.Alias('install'), self.Alias('install-data'))
-        self.env.Depends(self.Alias('install'), self.Alias('install-exec'))
-        self.env.Depends(self.Alias('check'), self.Alias('all'))
+        self.Alias('install', self.Alias('install-data'))
+        self.Alias('install', self.Alias('install-exec'))
 
         self.env.Append(PROJECTS=[self])
 
@@ -324,8 +323,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             args = self['TEST_ARGS']
 
         for node in nodes:
-            cmd = self.env.Command(str(node)+' test', # fake file name to make Command actually work
-                                   [node] + sources,
+            cmd = self.env.Command('CHECK %s' % os.path.basename(node.abspath),
+                                   [node] + self.Alias('all') + sources,
                                    '$COMMAND ${SOURCE.abspath} $ARGS',
                                    COMMAND=command,
                                    ARGS=args,
