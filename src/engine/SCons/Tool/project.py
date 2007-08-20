@@ -395,7 +395,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
     __default_autoinstall_keywords = dict(executable = False,
                                           arch_dependent = False,
                                           machine_specific = False,
-                                          writable = False)
+                                          writable = False,
+                                          base = True)
     def __autoinstall_node(self, node, **kwargs):
         kw = self.__default_autoinstall_keywords.copy()
         kw.update(self.env.get('autoinstall_keywords', {}))
@@ -448,6 +449,10 @@ class Project(SCons.Environment.SubstitutionEnvironment):
                     raise SCons.Errors.UserError('Invalid manual section %s' % section)
                 if not self['DIR'].is_man_section(ext[0]):
                     install_as = '%s.%s' % (SCons.Util.splitext(node.name)[0], section)
+            elif SCons.Util.is_String(kw['base']):
+                install_as = os.path.join(kw['base'], node.name)
+            elif not kw['base']:
+                install_as = node.get_path()
 
             tdir = self.subst(getattr(self['DIR'], tdir))
         else:                           # Directory is absolute
