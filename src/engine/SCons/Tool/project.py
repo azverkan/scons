@@ -31,6 +31,7 @@ concept to Automake compatibility.
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import os.path
+import string
 import sys
 from distutils import sysconfig
 
@@ -72,17 +73,6 @@ _standard_directory_hierarchy = {
     'lisp' : "${DIR.dataroot}/emacs/site-lisp",
     'locale' : "${DIR.dataroot}/locale",
     'man' : "${DIR.dataroot}/man",
-    'man1' : "${DIR.man}/man1",
-    'man2' : "${DIR.man}/man2",
-    'man3' : "${DIR.man}/man3",
-    'man4' : "${DIR.man}/man4",
-    'man5' : "${DIR.man}/man5",
-    'man6' : "${DIR.man}/man6",
-    'man7' : "${DIR.man}/man7",
-    'man8' : "${DIR.man}/man8",
-    'man9' : "${DIR.man}/man9",
-    'manl' : "${DIR.man}/manl",
-    'mann' : "${DIR.man}/mann",
     'sysconf' : "${DIR.prefix}/etc",
     'sharedstate' : "${DIR.prefix}/com", # most distros set it to /var/lib
     'pkgsharedstate' : "${DIR.sharedstate}/${NAME}", # not required by standard
@@ -106,11 +96,14 @@ _default_arch_dependent = (
     'exec_prefix', 'bin', 'sbin', 'libexec', 'pkglibexec', 'lib', 'pkglib'
     )
 
+_default_man_sections = "123456789ln"
+
 class DirectoryHierarchy:
     """Installation directory hierarchy.
     """
     def __init__(self, **kw):
         self.__arch_dependent = []
+        self.__man_sections = []
 
         directories = _standard_directory_hierarchy.copy()
         directories.update(kw)
@@ -119,8 +112,18 @@ class DirectoryHierarchy:
             self.DefineDirectory(directory, directories[directory],
                                  directory in _default_arch_dependent)
 
+        for section in _default_man_sections:
+            self.AddManSection(section)
+
     def is_arch_dependent(self, name):
         return name in self.__arch_dependent
+
+    def is_man_section(self, section):
+        return section in self.__man_sections
+
+    def AddManSection(self, section):
+        self.DefineDirectory('man'+section, '${DIR.man}/man'+section)
+        self.__man_sections.append(section)
 
     def DefineDirectory(self, name, directory, arch_dependent=False, help=None):
         # self.setattr(name, directory)
@@ -416,17 +419,46 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             else:
                 install = 'pkgdata'
 
+        install_as = None
         tdir = self.subst(install)
         arch_dependent = kw.get('arch_dependent', None)
-        if not os.path.isabs(tdir):
+        if not os.path.isabs(tdir):     # Directory is expanded
             if not arch_dependent:
                 arch_dependent = self['DIR'].is_arch_dependent(tdir)
+
+            ## Automatic handling of manual files
+
+            # SCons.Utils.splitext refuses to split digit-only extension,
+            # so we can't use node.suffix
+            dot, ext = string.rfind(node.name, '.'), ''
+            if dot>0: ext = node.name[dot+1:]
+            if not ext: ext = ' ' # intentionally invalid man section
+
+            if tdir == 'man':           # guess manual section from file suffix
+                if self['DIR'].is_man_section(ext[0]):
+                    # Installing to `man' directory a file whose
+                    # extension matches valid man section -- install
+                    # file in appropriate section.
+                    tdir += ext[0]
+                else:
+                    raise SCons.Errors.UserError("Can't figure out manual section of %s" % node.name)
+            elif tdir[:3] == 'man':     # request for specific manual section
+                section = tdir[3:]
+                if not self['DIR'].is_man_section(section):
+                    raise SCons.Errors.UserError('Invalid manual section %s' % section)
+                if not self['DIR'].is_man_section(ext[0]):
+                    install_as = '%s.%s' % (SCons.Util.splitext(node.name)[0], section)
+
             tdir = self.subst(getattr(self['DIR'], tdir))
-        else:
+        else:                           # Directory is absolute
             if not arch_dependent:
                 raise SCons.Errors.UserError('When specifying full absolute installation path, you need to specify arch_dependent argument that is not None (%s)' % node)
 
-        t = self.env.Install(tdir, node)
+        if install_as:
+            t = self.env.InstallAs(os.path.join(tdir, install_as), node)
+        else:
+            t = self.env.Install(tdir, node)
+
         if arch_dependent:
             self.env.Alias('install-exec-'+self['NAME'], t)
         else:
