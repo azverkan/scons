@@ -690,7 +690,8 @@ class CheckContext:
         # in tests, we must ensure, that the dependencies are worked out
         # correctly. Note that we can't use Conftest.py's support for config.h,
         # cause we will need to specify a builder for the config.h file ...
-        self.header = sconf.header
+        if hasattr(sconf, 'header'):
+            self.header = sconf.header
 
     def Message(self, text):
         """Inform about what we are doing right now, e.g.
