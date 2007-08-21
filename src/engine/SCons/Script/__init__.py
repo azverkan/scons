@@ -296,6 +296,8 @@ GlobalDefaultEnvironmentFunctions = [
     'Execute',
     'File',
     'FindFile',
+    'FindInstalledFiles',
+    'FindSourceFiles',
     'Flatten',
     'GetBuildPath',
     'Header',
@@ -313,11 +315,9 @@ GlobalDefaultEnvironmentFunctions = [
     'SourceCode',
     'SourceSignatures',
     'Split',
+    'Tag',
     'TargetSignatures',
     'Value',
-    'Tag',
-    'FindInstalledFiles',
-    'FindSourceFiles',
 ]
 
 GlobalDefaultBuilders = [
