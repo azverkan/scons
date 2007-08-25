@@ -32,10 +32,11 @@ Adds Environment.WithArgument and Environment.EnableArgument methods.
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import optparse
+import string
 
 import SCons.Script
 
-def WithArgument(env, name, help='', default=None, opts=('with','without'), metavar='DIR'):
+def WithArgument(env, name, help='', default=None, opts=('with','without'), metavar=-1):
     """Add optional support switches, by default --with-name and --without-name, with specified help string.
 
     Adds options for end-user to specify compilation options.  Option
@@ -53,6 +54,8 @@ def WithArgument(env, name, help='', default=None, opts=('with','without'), meta
     with_switch = '--%s-%s' % (opts[0], name)
     without_switch = '--%s-%s' % (opts[1], name)
     help_string = '%s' % (help)
+    if metavar == -1:
+        metavar = string.upper(name)
     SCons.Script.AddOption(with_switch, dest=var, metavar=metavar,
                            nargs='?', const=True, default=default, help=help_string)
     SCons.Script.AddOption(without_switch, dest=var,
@@ -64,7 +67,6 @@ def EnableArgument(*args, **kwargs):
     See WithArgument for details.
     """
     kwargs.setdefault('opts', ('enable', 'disable'))
-    kwargs.setdefault('metavar', None)
     apply(WithArgument, args, kwargs)
 
 def generate(env):
