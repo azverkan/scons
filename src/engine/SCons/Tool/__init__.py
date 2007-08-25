@@ -41,6 +41,7 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import imp
 import sys
 
+import SCons.Action
 import SCons.Builder
 import SCons.Errors
 import SCons.Node.FS
@@ -87,10 +88,26 @@ class Tool:
         self.init_kw = kw
 
         module = self._tool_module()
-        self.generate = module.generate
-        self.exists = module.exists
+        self._generate = module.generate
+        self._exists = module.exists
+        self._missing = getattr(module, 'missing', None)
         if hasattr(module, 'options'):
             self.options = module.options
+
+    def exists(self, env):
+        if self._missing:
+            if self._exists(env):
+                self.generate = self._generate
+            else:
+                self.generate = self._missing
+            return True
+
+        self.generate = self._generate
+        return self._exists(env)
+
+    def generate(self, *args, **kwargs):
+        self.exists(args[0])            # first arg is environment
+        return apply(self.generate, args, kwargs)
 
     def _tool_module(self):
         # TODO: Interchange zipimport with normal initilization for better error reporting
@@ -176,6 +193,36 @@ class Tool:
 
     def __str__(self):
         return self.name
+
+class Missing:
+    """Class for handling missing Tools.
+
+    After initializing class with name and optional emitter,
+    class.action will contain action for missing tool and
+    class.emitter will contain an emitter.
+    """
+    def __init__(self, name, emitter=None):
+        self.name = name
+        self._emitter = emitter
+        self.action =  SCons.Action.Action(
+            self._action_fun,
+            "Warning: Tool '%s' is missing, treating out-of-date $TARGET as built." % self.name)
+
+    def __str__(self):
+        return "<Missing Tool '%s'>"%self.name
+
+    def emitter(self, target, source, env):
+        if self._emitter:
+            target, source = self._emitter(target, source, env)
+        env.Precious(target)
+        return target, source
+
+    def _action_fun(self, target=None, source=None, env=None):
+        for targetnode in target:
+            if not targetnode.rexists():
+                raise SCons.Errors.UserError(
+                    "Tool '%s' is missing and %s target does not exist." % (self.name, targetnode))
+        return 0
 
 ##########################################################################
 #  Create common executable program / library / object builders
