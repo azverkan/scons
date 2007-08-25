@@ -89,5 +89,26 @@ def generate(env):
     env["LEXFLAGS"] = SCons.Util.CLVar("")
     env["LEXCOM"] = "$LEX $LEXFLAGS -t $SOURCES > $TARGET"
 
+def missing(env):
+    c_file, cxx_file = SCons.Tool.createCFileBuilders(env)
+    m = SCons.Tool.Missing('lex', lexEmitter)
+
+    # C
+    c_file.add_action(".l", m.action)
+    c_file.add_emitter(".l", m.emitter)
+
+    c_file.add_action(".lex", m.action)
+    c_file.add_emitter(".lex", m.emitter)
+
+    # Objective-C
+    cxx_file.add_action(".lm", m.action)
+    cxx_file.add_emitter(".lm", m.emitter)
+
+    # C++
+    cxx_file.add_action(".ll", m.action)
+    cxx_file.add_emitter(".ll", m.emitter)
+
+    env["LEXFLAGS"] = SCons.Util.CLVar("")
+
 def exists(env):
     return env.Detect(["flex", "lex"])

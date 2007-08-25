@@ -111,5 +111,32 @@ def generate(env):
     env['YACCHXXFILESUFFIX'] = '.hpp'
     env['YACCVCGFILESUFFIX'] = '.vcg'
 
+def missing(env):
+    """Add builders and emitters to pretend yacc is present."""
+    c_file, cxx_file = SCons.Tool.createCFileBuilders(env)
+    
+    # C
+    yMissing = SCons.Tool.Missing('yacc', emitter=yEmitter)
+    c_file.add_action('.y', yMissing.action)
+    c_file.add_emitter('.y', yMissing.emitter)
+
+    c_file.add_action('.yacc', yMissing.action)
+    c_file.add_emitter('.yacc', yMissing.emitter)
+
+    # Objective-C
+    ymMissing = SCons.Tool.Missing('yacc', emitter=ymEmitter)
+    c_file.add_action('.ym', ymMissing.action)
+    c_file.add_emitter('.ym', ymMissing.emitter)
+
+    # C++
+    yyMissing = SCons.Tool.Missing('yacc', emitter=yyEmitter)
+    cxx_file.add_action('.yy', yyMissing.action)
+    cxx_file.add_emitter('.yy', yyMissing.emitter)
+
+    env['YACCHFILESUFFIX'] = '.h'
+    env['YACCHXXFILESUFFIX'] = '.hpp'
+    env['YACCVCGFILESUFFIX'] = '.vcg'
+
+
 def exists(env):
     return env.Detect(['bison', 'yacc'])
