@@ -177,8 +177,10 @@ proj.Attach(
                                  "$SHELL $SOURCE >$TARGET")))
 env.Depends(lsm_name, env.Alias('dist-fetchmail'))
 
+t_rc = env.File('t.rc')
+env.Local(t_rc)
 proj.Test('t.smoke',
-          ['t.rc',
+          [t_rc,
            env.Program('rfc822', 'rfc822.c', CFLAGS='-DMAIN', OBJPREFIX='rfc822_'),
            env.Program('unmime', 'unmime.c',  CFLAGS='-DSTANDALONE', OBJPREFIX='unmime_'),
            env.Program('netrc', ['netrc.c', 'xmalloc.c', 'report.c'], CFLAGS='-DSTANDALONE', OBJPREFIX='netrc_'),
@@ -187,7 +189,7 @@ proj.Test('t.smoke',
            ],
 
           environment = {
-              'srcdir' : env.File('t.rc').dir,
+              'srcdir' : t_rc.rfile().dir,
               'LC_ALL' : 'C',
               'TZ' : 'UTC'
               })
