@@ -118,13 +118,15 @@ def Package(env, target=None, source=None, **kw):
 
     packagers=map(load_packager, PACKAGETYPE)
 
+    kw.setdefault('SHORTNAME', kw['NAME'])
+
     # now try to setup the default_target and the default PACKAGEROOT
     # arguments.
     try:
         # fill up the target list with a default target name until the PACKAGETYPE
         # list is of the same size as the target list.
         if target==None or target==[]:
-            target=["%(NAME)s-%(VERSION)s"%kw]
+            target=["%(SHORTNAME)s-%(VERSION)s"%kw]
 
         size_diff=len(PACKAGETYPE)-len(target)
         if size_diff>0:
