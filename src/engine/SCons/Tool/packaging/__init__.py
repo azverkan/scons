@@ -133,7 +133,7 @@ def Package(env, target=None, source=None, **kw):
             target.extend([target]*size_diff)
 
         if not kw.has_key('PACKAGEROOT'):
-            kw['PACKAGEROOT']="%(NAME)s-%(VERSION)s"%kw
+            kw['PACKAGEROOT']="%(SHORTNAME)s-%(VERSION)s"%kw
 
     except KeyError, e:
         raise SCons.Errors.UserError( "Missing PackageTag '%s'"%e.args[0] )
