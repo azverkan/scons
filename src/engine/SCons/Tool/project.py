@@ -66,8 +66,8 @@ _standard_directory_hierarchy = {
     'prefix' : "/usr/local",
     'dataroot' : "${DIR.prefix}/share",
     'data' : "${DIR.dataroot}",
-    'pkgdata' : "${DIR.data}/${NAME}", # not required by standard, Automake-specific
-    'doc' : "${DIR.dataroot}/doc/${NAME}",
+    'pkgdata' : "${DIR.data}/${SHORTNAME}", # not required by standard, Automake-specific
+    'doc' : "${DIR.dataroot}/doc/${SHORTNAME}",
     'html' : "${DIR.doc}",
     'dvi' : "${DIR.doc}",
     'ps' : "${DIR.doc}",
@@ -78,20 +78,20 @@ _standard_directory_hierarchy = {
     'man' : "${DIR.dataroot}/man",
     'sysconf' : "${DIR.prefix}/etc",
     'sharedstate' : "${DIR.prefix}/com", # most distros set it to /var/lib
-    'pkgsharedstate' : "${DIR.sharedstate}/${NAME}", # not required by standard
+    'pkgsharedstate' : "${DIR.sharedstate}/${SHORTNAME}", # not required by standard
     'localstate' : "${DIR.prefix}/var",
-    'pkglocalstate' : "${DIR.localstate}/${NAME}", # not required by standard
+    'pkglocalstate' : "${DIR.localstate}/${SHORTNAME}", # not required by standard
     'include' : "${DIR.prefix}/include",
-    'pkginclude' : "${DIR.include}/${NAME}", # not required by standard, Automake-specific
+    'pkginclude' : "${DIR.include}/${SHORTNAME}", # not required by standard, Automake-specific
     'exec_prefix' : "${DIR.prefix}",
     'bin' : "${DIR.exec_prefix}/bin",
     'sbin' : "${DIR.exec_prefix}/sbin",
     'libexec' : "${DIR.exec_prefix}/libexec",
-    'pkglibexec' : "${DIR.libexec}/${NAME}", # not required by standard
+    'pkglibexec' : "${DIR.libexec}/${SHORTNAME}", # not required by standard
     'lib' : "${DIR.exec_prefix}/lib",
-    'pkglib' : "${DIR.exec_prefix}/lib/${NAME}", # not required by standard, Automake-specific
+    'pkglib' : "${DIR.exec_prefix}/lib/${SHORTNAME}", # not required by standard, Automake-specific
     'oldinclude' : "/usr/include",
-    'pkgoldinclude' : "${DIR.oldinclude}/${NAME}", # not required by standard
+    'pkgoldinclude' : "${DIR.oldinclude}/${SHORTNAME}", # not required by standard
     'python' : sysconfig.get_python_lib(0,0,prefix='${DIR.prefix}') # not required by standard,
 }
 
@@ -193,7 +193,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 
         self._setdefault(
             DIR =  apply(DirectoryHierarchy, (), self.get('DIRECTORIES', {})),
-            shortname = self['NAME'],
+            SHORTNAME = self['NAME'],
             TEST_ENVIRONMENT = {},
             TEST_COMMAND = '',
             TEST_ARGS = '',
@@ -232,7 +232,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
 
     # Wrappers
     def Alias(self, alias, *args, **kwargs):
-        return apply(self.env.Alias, ( '%s-%s' % (alias, self['NAME']), ) + args, kwargs)
+        return apply(self.env.Alias, ( '%s-%s' % (alias, self['SHORTNAME']), ) + args, kwargs)
 
     def Configure(self, *args, **kwargs):
         try:
@@ -253,8 +253,8 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         header.Template('PACKAGE', 'Name of package', self['NAME'])
         header.Template('VERSION', 'Version number of package', self['VERSION'])
         header.Template('PACKAGE_NAME', 'Define to the full name of this package.', self['NAME'])
-        header.Template('PACKAGE_TARNAME', 'Define to one symbol short name of this package.  (Automake compatibility definition)', self.get('shortname'))
-        header.Template('PACKAGE_SHORT_NAME', 'Define to one symbol short name of this package.', self.get('shortname'))
+        header.Template('PACKAGE_TARNAME', 'Define to one symbol short name of this package.  (Automake compatibility definition)', self.get('SHORTNAME'))
+        header.Template('PACKAGE_SHORT_NAME', 'Define to one symbol short name of this package.', self.get('SHORTNAME'))
         header.Template('PACKAGE_VERSION', 'Define to the version of this package.', self['VERSION'])
         header.Template('PACKAGE_STRING', 'Define to the full name and version of this package.', '%s %s' % (self['NAME'], self['VERSION']))
         header.Template('PACKAGE_BUGREPORT', 'Define to the address where bug reports for this package should be sent.', self.get('BUGREPORT'))
@@ -309,9 +309,9 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = self['DIST_TYPE']
         if self['VERSION']:
-            pkg_kw['PACKAGEROOT'] = '%s-%s' % (self['NAME'], self['VERSION'])
+            pkg_kw['PACKAGEROOT'] = '%s-%s' % (self['SHORTNAME'], self['VERSION'])
         else:
-            pkg_kw['PACKAGEROOT'] = self['NAME']
+            pkg_kw['PACKAGEROOT'] = self['SHORTNAME']
 
         package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
@@ -475,9 +475,9 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             t = self.env.Install(tdir, node)
 
         if arch_dependent:
-            self.env.Alias('install-exec-'+self['NAME'], t)
+            self.env.Alias('install-exec-'+self['SHORTNAME'], t)
         else:
-            self.env.Alias('install-data-'+self['NAME'], t)
+            self.env.Alias('install-data-'+self['SHORTNAME'], t)
 
         return node
 
@@ -489,7 +489,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             returned_nodes.append(
                 apply(self.__autoinstall_node, (node,), kwargs))
 
-        self.env.Alias('all-'+self['NAME'], returned_nodes)
+        self.env.Alias('all-'+self['SHORTNAME'], returned_nodes)
         self.Attach(returned_nodes)
         return returned_nodes
 
