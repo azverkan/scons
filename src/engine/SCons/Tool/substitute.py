@@ -73,7 +73,10 @@ def subst_in_file(target, source, env):
                     else:
                         value = env.subst(subst_dict[key], SCons.Subst.SUBST_RAW)
                 except KeyError:
-                    raise SCons.Errors.UserError, 'Unknown substitution key: %s' % key
+                    if env.get('SUBST_IGNORE_UNKNOWN'):
+                        value = contents[match.start():match.end()]
+                    else:
+                        raise SCons.Errors.UserError, 'Unknown substitution key: %s' % key
             f.write(value)
 
             last = match.end()
