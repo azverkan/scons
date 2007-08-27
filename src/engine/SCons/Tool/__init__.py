@@ -404,7 +404,8 @@ def createCFileBuilders(env):
     except KeyError:
         c_file = SCons.Builder.Builder(action = {},
                                        emitter = {},
-                                       suffix = {None:'$CFILESUFFIX'})
+                                       suffix = {None:'$CFILESUFFIX'},
+                                       autoinstall_keywords = {'distribute': True})
         env['BUILDERS']['CFile'] = c_file
 
         env.SetDefault(CFILESUFFIX = '.c')
@@ -414,7 +415,8 @@ def createCFileBuilders(env):
     except KeyError:
         cxx_file = SCons.Builder.Builder(action = {},
                                          emitter = {},
-                                         suffix = {None:'$CXXFILESUFFIX'})
+                                         suffix = {None:'$CXXFILESUFFIX'},
+                                         autoinstall_keywords = {'distribute': True})
         env['BUILDERS']['CXXFile'] = cxx_file
         env.SetDefault(CXXFILESUFFIX = '.cc')
 
