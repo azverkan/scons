@@ -158,6 +158,13 @@ def find_project(name=None):
         if project['NAME'] == name:
             return project
 
+def _isdist_callback(node, result):
+  """Callback for FindSourceFiles to distribute also files with
+  node.attributes.distribute attr set.
+  """
+  if getattr(node.attributes, 'autoinstall_keywords', {}).get('distribute', None):
+    result.append(node)
+
 class Project(SCons.Environment.SubstitutionEnvironment):
     def _setdefault(self, **kw):
         for k in kw.keys():
@@ -297,7 +304,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
                 self.distribution_roots.append(node)
 
         for node in self.distribution_roots:
-            self.distribution.extend(self.env.FindSourceFiles(node))
+          self.distribution.extend(self.env.FindSourceFiles(node, callback=_isdist_callback))
 
         pkg_kw = dict(self.items())
         pkg_kw['PACKAGETYPE'] = self['DIST_TYPE']
