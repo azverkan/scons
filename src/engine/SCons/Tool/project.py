@@ -262,6 +262,19 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         if header.language == 'C':
             self.env.Append(CPPPATH=header.node.dir)
 
+    def _Substitute_dict(self, env, key):
+        restrict = env.get('_PROJECT_SUBST_RESTRICT', None)
+        if restrict is not None and key not in restrict:
+            raise SCons.Errors.UserError('Substitution key not allowed: %s' % key)
+
+        if self.has_key(key):
+            return self.subst('${'+key+'}', SCons.Subst.SUBST_RAW)
+
+        if env.has_key(key):
+            return env.subst('${'+key+'}', SCons.Subst.SUBST_RAW)
+
+        raise KeyError
+
     def Substitute(self, *args, **kwargs):
         """Substitute, but default dictionary is parent Environment's
         dictionary, updated by self."""
@@ -269,18 +282,12 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         if 'substitute' not in self.env['TOOLS']:
             self.env.Tool('substitute')
 
-        mydict = {}
-        mydict.update(self.env.Dictionary())
-        mydict.update(self._dict)
-
         userdict = kwargs.get('SUBST_DICT', None)
         if userdict is None:
-            final_dict = mydict
+            final_dict = self._Substitute_dict
         elif SCons.Util.is_Sequence(userdict):
-            final_dict = {}
-            for key in userdict:
-                if mydict.has_key(key):
-                    final_dict[key] = mydict[key]
+            final_dict = self._Substitute_dict
+            kwargs['_PROJECT_SUBST_RESTRICT'] = userdict
         else:
             final_dict = userdict
 
@@ -312,6 +319,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             pkg_kw['PACKAGEROOT'] = '%s-%s' % (self['SHORTNAME'], self['VERSION'])
         else:
             pkg_kw['PACKAGEROOT'] = self['SHORTNAME']
+        pkg_kw['PACKAGEROOT'] = self.env.Dir(pkg_kw['PACKAGEROOT'])
 
         package = apply(self.env.Package, (list(set(self.arg2nodes(self.distribution))),), pkg_kw)
         self.env.Ignore(package[0].dir, package)
