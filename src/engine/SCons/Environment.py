@@ -686,15 +686,17 @@ class SubstitutionEnvironment:
 
 # Used by the FindSourceFiles() method, below.
 # Stuck here for support of pre-2.2 Python versions.
-def build_source(ss, result):
+def build_source(ss, result, callback=None):
     for s in ss:
+        if callback:
+            callback(s, result)
         if isinstance(s, SCons.Node.FS.Dir):
-            build_source(s.all_children(), result)
+            build_source(s.all_children(), result, callback)
         elif s.has_builder():
-            build_source(s.sources, result)
+            build_source(s.sources, result, callback)
             if s.implicit is None:
                 s.scan()
-            build_source(s.implicit, result)
+            build_source(s.implicit, result, callback)
         elif isinstance(s.disambiguate(), SCons.Node.FS.File):
             result.append(s)
 
@@ -1710,8 +1712,12 @@ class Base(SubstitutionEnvironment):
         """
         return SCons.Node.Python.Value(value, built_value)
 
-    def FindSourceFiles(self, node='.'):
+    def FindSourceFiles(self, node='.', callback=None):
         """ returns a list of all source files.
+
+        Optional callback argument, when given, will be called for
+        each node in hierarchy with two arguments: node and result
+        list to which it may decide to append the node.
         """
         node = self.arg2nodes(node, self.fs.Entry)[0]
 
@@ -1726,7 +1732,7 @@ class Base(SubstitutionEnvironment):
         #            build_source(s.sources, result)
         #        elif isinstance(s.disambiguate(), SCons.Node.FS.File):
         #            result.append(s)
-        build_source(node.all_children(), sources)
+        build_source(node.all_children(), sources, callback)
 
         # now strip the build_node from the sources by calling the srcnode
         # function
