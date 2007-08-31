@@ -81,6 +81,8 @@ def package(env, target, source, PACKAGEROOT, NAME, VERSION,
     if not kw.has_key('SOURCE_URL'):
         kw['SOURCE_URL']=(str(target[0])+".tar.gz").replace('.rpm', '')
 
+    kw['ensure_suffix'] = True
+
     # now call the rpm builder to actually build the packet.
     return apply(bld, [env, target, source], kw)
 

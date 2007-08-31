@@ -34,4 +34,4 @@ def package(env, target, source, PACKAGEROOT, **kw):
     bld = env['BUILDERS']['Tar']
     bld.set_suffix('.tar.bz2')
     bld.push_emitter(packageroot_emitter(PACKAGEROOT, honor_install_location=0))
-    return bld(env, target, source, TARFLAGS='-jc')
+    return bld(env, target, source, TARFLAGS='-jc', ensure_suffix=True)

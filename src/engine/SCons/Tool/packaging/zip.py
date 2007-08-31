@@ -35,4 +35,4 @@ def package(env, target, source, PACKAGEROOT, **kw):
     bld.set_suffix('.zip')
     bld.push_emitter(packageroot_emitter(PACKAGEROOT))
     bld.push_emitter(stripinstall_emitter())
-    return bld(env, target, source)
+    return bld(env, target, source, ensure_suffix=True)

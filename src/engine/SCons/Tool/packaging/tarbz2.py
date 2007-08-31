@@ -35,4 +35,4 @@ def package(env, target, source, PACKAGEROOT, **kw):
     bld.set_suffix('.tar.gz')
     bld.push_emitter(packageroot_emitter(PACKAGEROOT))
     bld.push_emitter(stripinstall_emitter())
-    return bld(env, target, source, TARFLAGS='-jc')
+    return bld(env, target, source, TARFLAGS='-jc', ensure_suffix=True)

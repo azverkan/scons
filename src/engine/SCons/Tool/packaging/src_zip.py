@@ -34,4 +34,4 @@ def package(env, target, source, PACKAGEROOT, **kw):
     bld = env['BUILDERS']['Zip']
     bld.set_suffix('.zip')
     bld.push_emitter(packageroot_emitter(PACKAGEROOT, honor_install_location=0))
-    return bld(env, target, source)
+    return bld(env, target, source, ensure_suffix=True)
