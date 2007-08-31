@@ -325,7 +325,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
         self.env.Ignore(package[0].dir, package)
         self.env.Alias('dist', package)
 
-        self.Alias('distcheck', self.env.Command(
+        distcheck = self.env.Command(
             'DISTRIBUTION CHECK', package,
             ['mkdir $SUBDIR $SUBDIR/_build || { echo "*** PLEASE REMOVE $SUBDIR" ; exit 1; }',
              'tar -C $SUBDIR -xf ${SOURCE.abspath}', # Unpack original distribution
@@ -354,7 +354,10 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             SCONSCOM='$SCONS $SCONSOPTS',
             SUBDIR=self.env.Dir(self['DISTCHECK_SUBDIR']),
             PACKAGEROOT=pkg_kw['PACKAGEROOT'],
-            ))
+            )
+
+        self.env.Ignore(distcheck[0].dir, distcheck)
+        self.Alias('distcheck', distcheck)
 
         self.finished = True
         _all_projects.remove(self)
