@@ -368,6 +368,7 @@ class BuilderBase:
                         is_explicit = 1,
                         src_builder = [],
                         autoinstall_keywords = {},
+                        ensure_suffix = False,
                         **overrides):
         if __debug__: logInstanceCreation(self, 'Builder.BuilderBase')
         self._memo = {}
@@ -395,6 +396,7 @@ class BuilderBase:
 
         self.set_suffix(suffix)
         self.set_src_suffix(src_suffix)
+        self.ensure_suffix = ensure_suffix
 
         self.target_factory = target_factory
         self.source_factory = source_factory
@@ -469,7 +471,7 @@ class BuilderBase:
             executor.add_sources(slist)
             return executor
 
-    def _adjustixes(self, files, pre, suf):
+    def _adjustixes(self, files, pre, suf, ensure_suffix=False):
         if not files:
             return []
         result = []
@@ -478,7 +480,7 @@ class BuilderBase:
 
         for f in files:
             if SCons.Util.is_String(f):
-                f = SCons.Util.adjustixes(f, pre, suf)
+                f = SCons.Util.adjustixes(f, pre, suf, ensure_suffix)
             result.append(f)
         return result
 
@@ -507,7 +509,7 @@ class BuilderBase:
                 splitext = lambda S,self=self,env=env: self.splitext(S,env)
                 tlist = [ t_from_s(pre, suf, splitext) ]
         else:
-            target = self._adjustixes(target, pre, suf)
+            target = self._adjustixes(target, pre, suf, self.ensure_suffix)
             tlist = env.arg2nodes(target, target_factory)
 
         if self.emitter:

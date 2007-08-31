@@ -23,6 +23,25 @@ RELEASE 0.XX - XXX
 
 
 
+  - Add to each target an implicit dependency on the external command(s)
+    used to build the target, as found by searching env['ENV']['PATH']
+    for the first argument on each executed command line.
+
+  - Add support for a $IMPLICIT_COMMAND_DEPENDENCIES construction
+    variabe that can be used to disable the automatic implicit
+    dependency on executed commands.
+
+  - Add an "ensure_suffix" keyword to Builder() definitions that, when
+    true, will add the configured suffix to the targets even if it looks
+    like they already have a different suffix.
+
+  From Christoph Wiedemann:
+
+  - Add implicit dependencies on the commands used to build a target.
+
+
+
+
 RELEASE 0.97.0d20070809 - Fri, 10 Aug 2007 10:51:27 -0500
 
   From Lars Albertsson:
