@@ -88,7 +88,7 @@ env = conf.Finish()
 #### Project
 ####
 
-proj = env.Project('fetchmail', '6.4.0', 'fetchmail-devel@lists.berlios.de',
+proj = env.Project('fetchmail', '6.4.0-pre1', 'fetchmail-devel@lists.berlios.de',
                    header='config.h', DIST_TYPE='src_tarbz2')
 
 ## DISTDOCS
