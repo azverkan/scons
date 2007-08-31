@@ -509,7 +509,7 @@ class BuilderBase:
                 splitext = lambda S,self=self,env=env: self.splitext(S,env)
                 tlist = [ t_from_s(pre, suf, splitext) ]
         else:
-            target = self._adjustixes(target, pre, suf, self.ensure_suffix)
+            target = self._adjustixes(target, pre, suf, env.get('ensure_suffix', self.ensure_suffix))
             tlist = env.arg2nodes(target, target_factory)
 
         if self.emitter:
