@@ -201,7 +201,7 @@ class Project(SCons.Environment.SubstitutionEnvironment):
             DISTCHECK_SUBDIR = '_distcheck',
 
             # Autotools compatibility
-            PACKAGE = self['SHORTNAME'],
+            PACKAGE = self.get('SHORTNAME', self['NAME']),
             configure_input = '',
             )
 
