@@ -60,7 +60,7 @@ class SConfTestCase(unittest.TestCase):
         import SCons.SConsign
         SCons.SConsign.write() # simulate normal scons-finish
         for n in sys.modules.keys():
-            if string.split(n, '.')[0] == 'SCons':
+            if string.split(n, '.')[0] == 'SCons' and n[:12] != 'SCons.compat':
                 m = sys.modules[n]
                 if type(m) is ModuleType:
                     # if this is really a scons module, clear its namespace
@@ -95,10 +95,10 @@ class SConfTestCase(unittest.TestCase):
         # 'TryLink'), so we are aware of reloading modules.
         
         def checks(self, sconf, TryFuncString):
-            TryFunc = self.SConf.SConf.__dict__[TryFuncString]
-            res1 = TryFunc( sconf, "int main() { return 0; }", ".c" )
+            TryFunc = self.SConf.SConfBase.__dict__[TryFuncString]
+            res1 = TryFunc( sconf, "int main() { return 0; }\n", ".c" )
             res2 = TryFunc( sconf,
-                            '#include "no_std_header.h"\nint main() {return 0; }',
+                            '#include "no_std_header.h"\nint main() {return 0; }\n',
                             '.c' )
             return (res1,res2)
 
@@ -136,8 +136,9 @@ class SConfTestCase(unittest.TestCase):
         sconf = self.SConf.SConf(self.scons_env,
                                  conf_dir=self.test.workpath('config.tests'),
                                  log_file=self.test.workpath('config.log'))
-        test_h = self.test.write( self.test.workpath('config.tests', 'no_std_header.h'),
-                                  "/* we are changing a dependency now */" );
+        no_std_header_h = self.test.workpath('config.tests', 'no_std_header.h')
+        test_h = self.test.write( no_std_header_h,
+                                  "/* we are changing a dependency now */\n" );
         try:
             res = checks( self, sconf, TryFunc )
             log = self.test.read( self.test.workpath('config.log') )
@@ -187,7 +188,7 @@ class SConfTestCase(unittest.TestCase):
                         pass
                     def clear(self):
                         pass
-                    def current(self, calc=None):
+                    def is_up_to_date(self):
                         return None
                     def prepare(self):
                         pass
@@ -199,7 +200,7 @@ class SConfTestCase(unittest.TestCase):
                         pass
                     def get_stored_info(self):
                         pass
-                    def calc_signature(self, calc):
+                    def do_not_store_info(self):
                         pass
                     def get_executor(self):
                         class Executor:
@@ -236,7 +237,7 @@ int main() {
 }
 """
             res1 = sconf.TryRun( prog, ".c" ) 
-            res2 = sconf.TryRun( "not a c program", ".c" )
+            res2 = sconf.TryRun( "not a c program\n", ".c" )
             return (res1, res2)
         
         self._resetSConfState()
@@ -275,7 +276,7 @@ int main() {
         """Test SConf.TryAction
         """
         def actionOK(target, source, env):
-            open(str(target[0]), "w").write( "RUN OK" )
+            open(str(target[0]), "w").write( "RUN OK\n" )
             return None
         def actionFAIL(target, source, env):
             return 1
@@ -285,7 +286,7 @@ int main() {
                                   log_file=self.test.workpath('config.log'))
         try:
             (ret, output) = sconf.TryAction(action=actionOK)
-            assert ret and output == "RUN OK", (ret, output)
+            assert ret and output == "RUN OK" + os.linesep, (ret, output)
             (ret, output) = sconf.TryAction(action=actionFAIL)
             assert not ret and output == "", (ret, output)
         finally:
@@ -492,6 +493,40 @@ int main() {
             assert r, "did not find strcpy"
             r = sconf.CheckFunc('hopefullynofunction')
             assert not r, "unexpectedly found hopefullynofunction"
+
+        finally:
+            sconf.Finish()
+
+    def test_CheckTypeSize(self):
+        """Test SConf.CheckTypeSize()
+        """
+        self._resetSConfState()
+        sconf = self.SConf.SConf(self.scons_env,
+                                 conf_dir=self.test.workpath('config.tests'),
+                                 log_file=self.test.workpath('config.log'))
+        try:
+            # CheckTypeSize()
+
+            # In ANSI C, sizeof(char) == 1.
+            r = sconf.CheckTypeSize('char', expect = 1)
+            assert r == 1, "sizeof(char) != 1 ??"
+            r = sconf.CheckTypeSize('char', expect = 0)
+            assert r == 0, "sizeof(char) == 0 ??"
+            r = sconf.CheckTypeSize('char', expect = 2)
+            assert r == 0, "sizeof(char) == 2 ??"
+            r = sconf.CheckTypeSize('char')
+            assert r == 1, "sizeof(char) != 1 ??"
+            r = sconf.CheckTypeSize('const unsigned char')
+            assert r == 1, "sizeof(const unsigned char) != 1 ??"
+
+            # Checking C++
+            r = sconf.CheckTypeSize('const unsigned char', language = 'C++')
+            assert r == 1, "sizeof(const unsigned char) != 1 ??"
+
+            # Checking Non-existing type
+            r = sconf.CheckTypeSize('thistypedefhasnotchancetosexist_scons')
+            assert r == 0, \
+                   "Checking size of thistypedefhasnotchancetosexist_scons succeeded ?"
 
         finally:
             sconf.Finish()

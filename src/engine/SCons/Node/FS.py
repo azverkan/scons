@@ -35,8 +35,10 @@ that can be used by scripts or modules looking for the canonical default.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+import fnmatch
 import os
 import os.path
+import re
 import shutil
 import stat
 import string
@@ -49,9 +51,12 @@ from SCons.Debug import logInstanceCreation
 import SCons.Errors
 import SCons.Memoize
 import SCons.Node
+import SCons.Node.Alias
 import SCons.Subst
 import SCons.Util
 import SCons.Warnings
+
+from SCons.Debug import Trace
 
 # The max_drift value:  by default, use a cached signature value for
 # any file that's been untouched for more than two days.
@@ -80,6 +85,42 @@ Save_Strings = None
 def save_strings(val):
     global Save_Strings
     Save_Strings = val
+
+#
+# Avoid unnecessary function calls by recording a Boolean value that
+# tells us whether or not os.path.splitdrive() actually does anything
+# on this system, and therefore whether we need to bother calling it
+# when looking up path names in various methods below.
+# 
+
+do_splitdrive = None
+
+def initialize_do_splitdrive():
+    global do_splitdrive
+    drive, path = os.path.splitdrive('X:/foo')
+    do_splitdrive = not not drive
+
+initialize_do_splitdrive()
+
+#
+
+needs_normpath_check = None
+
+def initialize_normpath_check():
+    """
+    Initialize the normpath_check regular expression.
+
+    This function is used by the unit tests to re-initialize the pattern
+    when testing for behavior with different values of os.sep.
+    """
+    global needs_normpath_check
+    if os.sep == '/':
+        pattern = r'.*/|\.$|\.\.$'
+    else:
+        pattern = r'.*[/%s]|\.$|\.\.$' % re.escape(os.sep)
+    needs_normpath_check = re.compile(pattern)
+
+initialize_normpath_check()
 
 #
 # SCons.Action objects for interacting with the outside world.
@@ -487,6 +528,7 @@ class Base(SCons.Node.Node):
         assert directory, "A directory must be provided"
 
         self.abspath = directory.entry_abspath(name)
+        self.labspath = directory.entry_labspath(name)
         if directory.path == '.':
             self.path = name
         else:
@@ -540,9 +582,29 @@ class Base(SCons.Node.Node):
         return result
 
     def _get_str(self):
+        global Save_Strings
         if self.duplicate or self.is_derived():
             return self.get_path()
-        return self.srcnode().get_path()
+        srcnode = self.srcnode()
+        if srcnode.stat() is None and not self.stat() is None:
+            result = self.get_path()
+        else:
+            result = srcnode.get_path()
+        if not Save_Strings:
+            # We're not at the point where we're saving the string string
+            # representations of FS Nodes (because we haven't finished
+            # reading the SConscript files and need to have str() return
+            # things relative to them).  That also means we can't yet
+            # cache values returned (or not returned) by stat(), since
+            # Python code in the SConscript files might still create
+            # or otherwise affect the on-disk file.  So get rid of the
+            # values that the underlying stat() method saved.
+            try: del self._memo['stat']
+            except KeyError: pass
+            if not self is srcnode:
+                try: del srcnode._memo['stat']
+                except KeyError: pass
+        return result
 
     rstr = __str__
 
@@ -603,15 +665,11 @@ class Base(SCons.Node.Node):
         corresponding to its source file.  Otherwise, return
         ourself.
         """
-        dir=self.dir
-        name=self.name
-        while dir:
-            if dir.srcdir:
-                srcnode = dir.srcdir.Entry(name)
-                srcnode.must_be_same(self.__class__)
-                return srcnode
-            name = dir.name + os.sep + name
-            dir = dir.up()
+        srcdir_list = self.dir.srcdir_list()
+        if srcdir_list:
+            srcnode = srcdir_list[0].Entry(self.name)
+            srcnode.must_be_same(self.__class__)
+            return srcnode
         return self
 
     def get_path(self, dir=None):
@@ -669,7 +727,7 @@ class Base(SCons.Node.Node):
     def target_from_source(self, prefix, suffix, splitext=SCons.Util.splitext):
         """
 
-	Generates a target entry that corresponds to this entry (usually
+        Generates a target entry that corresponds to this entry (usually
         a source file) with the specified prefix and suffix.
 
         Note that this method can be overridden dynamically for generated
@@ -740,6 +798,9 @@ class Base(SCons.Node.Node):
                         break
         self._memo['rentry'] = result
         return result
+
+    def _glob1(self, pattern, ondisk=True, source=False, strings=False):
+        return []
 
 class Entry(Base):
     """This is the class for generic Node.FS entries--that is, things
@@ -847,6 +908,15 @@ class Entry(Base):
             raise "rel_path() could not disambiguate File/Dir"
         return d.rel_path(other)
 
+    def new_ninfo(self):
+        return self.disambiguate().new_ninfo()
+
+    def changed_since_last_build(self, target, prev_ni):
+        return self.disambiguate().changed_since_last_build(target, prev_ni)
+
+    def _glob1(self, pattern, ondisk=True, source=False, strings=False):
+        return self.disambiguate()._glob1(pattern, ondisk, source, strings)
+
 # This is for later so we can differentiate between Entry the class and Entry
 # the method of the FS class.
 _classEntry = Entry
@@ -875,6 +945,8 @@ class LocalFS:
     #    return os.chdir(path)
     def chmod(self, path, mode):
         return os.chmod(path, mode)
+    def copy(self, src, dst):
+        return shutil.copy(src, dst)
     def copy2(self, src, dst):
         return shutil.copy2(src, dst)
     def exists(self, path):
@@ -960,11 +1032,14 @@ class FS(LocalFS):
             self.pathTop = path
         self.defaultDrive = _my_normcase(os.path.splitdrive(self.pathTop)[0])
 
-        self.Top = self._doLookup(Dir, os.path.normpath(self.pathTop))
+        self.Top = self.Dir(self.pathTop)
         self.Top.path = '.'
         self.Top.tpath = '.'
         self._cwd = self.Top
 
+        DirNodeInfo.fs = self
+        FileNodeInfo.fs = self
+    
     def set_SConstruct_dir(self, dir):
         self.SConstruct_dir = dir
 
@@ -976,161 +1051,6 @@ class FS(LocalFS):
 
     def getcwd(self):
         return self._cwd
-
-    def _doLookup_key(self, fsclass, name, directory = None, create = 1):
-        return (fsclass, name, directory)
-
-    memoizer_counters.append(SCons.Memoize.CountDict('_doLookup', _doLookup_key))
-
-    def _doLookup(self, fsclass, name, directory = None, create = 1):
-        """This method differs from the File and Dir factory methods in
-        one important way: the meaning of the directory parameter.
-        In this method, if directory is None or not supplied, the supplied
-        name is expected to be an absolute path.  If you try to look up a
-        relative path with directory=None, then an AssertionError will be
-        raised.
-        """
-        memo_key = (fsclass, name, directory)
-        try:
-            memo_dict = self._memo['_doLookup']
-        except KeyError:
-            memo_dict = {}
-            self._memo['_doLookup'] = memo_dict
-        else:
-            try:
-                return memo_dict[memo_key]
-            except KeyError:
-                pass
-
-        if not name:
-            # This is a stupid hack to compensate for the fact that the
-            # POSIX and Windows versions of os.path.normpath() behave
-            # differently in older versions of Python.  In particular,
-            # in POSIX:
-            #   os.path.normpath('./') == '.'
-            # in Windows:
-            #   os.path.normpath('./') == ''
-            #   os.path.normpath('.\\') == ''
-            #
-            # This is a definite bug in the Python library, but we have
-            # to live with it.
-            name = '.'
-        path_orig = string.split(name, os.sep)
-        path_norm = string.split(_my_normcase(name), os.sep)
-
-        first_orig = path_orig.pop(0)   # strip first element
-        unused = path_norm.pop(0)   # strip first element
-
-        drive, path_first = os.path.splitdrive(first_orig)
-        if path_first:
-            path_orig = [ path_first, ] + path_orig
-            path_norm = [ _my_normcase(path_first), ] + path_norm
-        else:
-            # Absolute path
-            drive = _my_normcase(drive)
-            try:
-                directory = self.Root[drive]
-            except KeyError:
-                if not create:
-                    raise SCons.Errors.UserError
-                directory = RootDir(drive, self)
-                self.Root[drive] = directory
-                if not drive:
-                    self.Root[self.defaultDrive] = directory
-                elif drive == self.defaultDrive:
-                    self.Root[''] = directory
-
-        if not path_orig:
-            memo_dict[memo_key] = directory
-            return directory
-
-        last_orig = path_orig.pop()     # strip last element
-        last_norm = path_norm.pop()     # strip last element
-
-        # Lookup the directory
-        for orig, norm in map(None, path_orig, path_norm):
-            try:
-                entries = directory.entries
-            except AttributeError:
-                # We tried to look up the entry in either an Entry or
-                # a File.  Give whatever it is a chance to do what's
-                # appropriate: morph into a Dir or raise an exception.
-                directory.must_be_same(Dir)
-                entries = directory.entries
-            try:
-                directory = entries[norm]
-            except KeyError:
-                if not create:
-                    raise SCons.Errors.UserError
-
-                d = Dir(orig, directory, self)
-
-                # Check the file system (or not, as configured) to make
-                # sure there isn't already a file there.
-                d.diskcheck_match()
-
-                directory.entries[norm] = d
-                directory.add_wkid(d)
-                directory = d
-
-        directory.must_be_same(Dir)
-
-        try:
-            e = directory.entries[last_norm]
-        except KeyError:
-            if not create:
-                raise SCons.Errors.UserError
-
-            result = fsclass(last_orig, directory, self)
-
-            # Check the file system (or not, as configured) to make
-            # sure there isn't already a directory at the path on
-            # disk where we just created a File node, and vice versa.
-            result.diskcheck_match()
-
-            directory.entries[last_norm] = result
-            directory.add_wkid(result)
-        else:
-            e.must_be_same(fsclass)
-            result = e
-
-        memo_dict[memo_key] = result
-
-        return result 
-
-    def _transformPath(self, name, directory):
-        """Take care of setting up the correct top-level directory,
-        usually in preparation for a call to doLookup().
-
-        If the path name is prepended with a '#', then it is unconditionally
-        interpreted as relative to the top-level directory of this FS.
-
-        If directory is None, and name is a relative path,
-        then the same applies.
-        """
-        try:
-            # Decide if this is a top-relative look up.  The normal case
-            # (by far) is handed a non-zero-length string to look up,
-            # so just (try to) check for the initial '#'.
-            top_relative = (name[0] == '#')
-        except (AttributeError, IndexError):
-            # The exceptions we may encounter in unusual cases:
-            #   AttributeError: a proxy without a __getitem__() method.
-            #   IndexError: a null string.
-            top_relative = False
-            name = str(name)
-        if top_relative:
-            directory = self.Top
-            name = name[1:]
-            if name and (name[0] == os.sep or name[0] == '/'):
-                # Correct such that '#/foo' is equivalent
-                # to '#foo'.
-                name = name[1:]
-            name = os.path.normpath(os.path.join('.', name))
-            return (name, directory)
-        elif not directory:
-            directory = self._cwd
-        return (os.path.normpath(name), directory)
 
     def chdir(self, dir, change_os_dir=0):
         """Change the current working directory for lookups.
@@ -1147,25 +1067,111 @@ class FS(LocalFS):
             self._cwd = curr
             raise
 
-    def Entry(self, name, directory = None, create = 1, klass=None):
+    def get_root(self, drive):
+        """
+        Returns the root directory for the specified drive, creating
+        it if necessary.
+        """
+        drive = _my_normcase(drive)
+        try:
+            return self.Root[drive]
+        except KeyError:
+            root = RootDir(drive, self)
+            self.Root[drive] = root
+            if not drive:
+                self.Root[self.defaultDrive] = root
+            elif drive == self.defaultDrive:
+                self.Root[''] = root
+            return root
+
+    def _lookup(self, p, directory, fsclass, create=1):
+        """
+        The generic entry point for Node lookup with user-supplied data.
+
+        This translates arbitrary input into a canonical Node.FS object
+        of the specified fsclass.  The general approach for strings is
+        to turn it into a fully normalized absolute path and then call
+        the root directory's lookup_abs() method for the heavy lifting.
+
+        If the path name begins with '#', it is unconditionally
+        interpreted relative to the top-level directory of this FS.  '#'
+        is treated as a synonym for the top-level SConstruct directory,
+        much like '~' is treated as a synonym for the user's home
+        directory in a UNIX shell.  So both '#foo' and '#/foo' refer
+        to the 'foo' subdirectory underneath the top-level SConstruct
+        directory.
+
+        If the path name is relative, then the path is looked up relative
+        to the specified directory, or the current directory (self._cwd,
+        typically the SConscript directory) if the specified directory
+        is None.
+        """
+        if isinstance(p, Base):
+            # It's already a Node.FS object.  Make sure it's the right
+            # class and return.
+            p.must_be_same(fsclass)
+            return p
+        # str(p) in case it's something like a proxy object
+        p = str(p)
+
+        initial_hash = (p[0:1] == '#')
+        if initial_hash:
+            # There was an initial '#', so we strip it and override
+            # whatever directory they may have specified with the
+            # top-level SConstruct directory.
+            p = p[1:]
+            directory = self.Top
+
+        if directory and not isinstance(directory, Dir):
+            directory = self.Dir(directory)
+
+        if do_splitdrive:
+            drive, p = os.path.splitdrive(p)
+        else:
+            drive = ''
+        if drive and not p:
+            # This causes a naked drive letter to be treated as a synonym
+            # for the root directory on that drive.
+            p = os.sep
+        absolute = os.path.isabs(p)
+
+        needs_normpath = needs_normpath_check.match(p)
+
+        if initial_hash or not absolute:
+            # This is a relative lookup, either to the top-level
+            # SConstruct directory (because of the initial '#') or to
+            # the current directory (the path name is not absolute).
+            # Add the string to the appropriate directory lookup path,
+            # after which the whole thing gets normalized.
+            if not directory:
+                directory = self._cwd
+            if p:
+                p = directory.labspath + '/' + p
+            else:
+                p = directory.labspath
+
+        if needs_normpath:
+            p = os.path.normpath(p)
+
+        if drive or absolute:
+            root = self.get_root(drive)
+        else:
+            if not directory:
+                directory = self._cwd
+            root = directory.root
+
+        if os.sep != '/':
+            p = string.replace(p, os.sep, '/')
+        return root._lookup_abs(p, fsclass, create)
+
+    def Entry(self, name, directory = None, create = 1):
         """Lookup or create a generic Entry node with the specified name.
         If the name is a relative path (begins with ./, ../, or a file
         name), then it is looked up relative to the supplied directory
         node, or to the top level directory of the FS (supplied at
         construction time) if no directory is supplied.
         """
-
-        if not klass:
-            klass = Entry
-
-        if isinstance(name, Base):
-            name.must_be_same(klass)
-            return name
-        else:
-            if directory and not isinstance(directory, Dir):
-                directory = self.Dir(directory)
-            name, directory = self._transformPath(name, directory)
-            return self._doLookup(klass, name, directory, create)
+        return self._lookup(name, directory, Entry, create)
 
     def File(self, name, directory = None, create = 1):
         """Lookup or create a File node with the specified name.  If
@@ -1177,9 +1183,9 @@ class FS(LocalFS):
         This method will raise TypeError if a directory is found at the
         specified path.
         """
-        return self.Entry(name, directory, create, File)
+        return self._lookup(name, directory, File, create)
 
-    def Dir(self, name, directory = None, create = 1):
+    def Dir(self, name, directory = None, create = True):
         """Lookup or create a Dir node with the specified name.  If
         the name is a relative path (begins with ./, ../, or a file name),
         then it is looked up relative to the supplied directory node,
@@ -1189,7 +1195,7 @@ class FS(LocalFS):
         This method will raise TypeError if a normal file is found at the
         specified path.
         """
-        return self.Entry(name, directory, create, Dir)
+        return self._lookup(name, directory, Dir, create)
 
     def BuildDir(self, build_dir, src_dir, duplicate=1):
         """Link the supplied build directory to the source directory
@@ -1241,11 +1247,40 @@ class FS(LocalFS):
             message = fmt % string.join(map(str, targets))
         return targets, message
 
+    def Glob(self, pathname, ondisk=True, source=True, strings=False, cwd=None):
+        """
+        Globs
+
+        This is mainly a shim layer 
+        """
+        if cwd is None:
+            cwd = self.getcwd()
+        return cwd.glob(pathname, ondisk, source, strings)
+
 class DirNodeInfo(SCons.Node.NodeInfoBase):
-    pass
+    # This should get reset by the FS initialization.
+    current_version_id = 1
+
+    fs = None
+
+    def str_to_node(self, s):
+        top = self.fs.Top
+        root = top.root
+        if do_splitdrive:
+            drive, s = os.path.splitdrive(s)
+            if drive:
+                root = self.fs.get_root(drive)
+        if not os.path.isabs(s):
+            s = top.labspath + '/' + s
+        return root._lookup_abs(s, Entry)
 
 class DirBuildInfo(SCons.Node.BuildInfoBase):
-    pass
+    current_version_id = 1
+
+glob_magic_check = re.compile('[*?[]')
+
+def has_glob_magic(s):
+    return glob_magic_check.search(s) is not None
 
 class Dir(Base):
     """A class for directories in a file system.
@@ -1280,6 +1315,7 @@ class Dir(Base):
         self.searched = 0
         self._sconsign = None
         self.build_dirs = []
+        self.root = self.dir.root
 
         # Don't just reset the executor, replace its action list,
         # because it might have some pre-or post-actions that need to
@@ -1314,17 +1350,43 @@ class Dir(Base):
             node.duplicate = node.get_dir().duplicate
 
     def Entry(self, name):
-        """Create an entry node named 'name' relative to this directory."""
+        """
+        Looks up or creates an entry node named 'name' relative to
+        this directory.
+        """
         return self.fs.Entry(name, self)
 
-    def Dir(self, name):
-        """Create a directory node named 'name' relative to this directory."""
-        dir = self.fs.Dir(name, self)
+    def Dir(self, name, create=True):
+        """
+        Looks up or creates a directory node named 'name' relative to
+        this directory.
+        """
+        dir = self.fs.Dir(name, self, create)
         return dir
 
     def File(self, name):
-        """Create a file node named 'name' relative to this directory."""
+        """
+        Looks up or creates a file node named 'name' relative to
+        this directory.
+        """
         return self.fs.File(name, self)
+
+    def _lookup_rel(self, name, klass, create=1):
+        """
+        Looks up a *normalized* relative path name, relative to this
+        directory.
+
+        This method is intended for use by internal lookups with
+        already-normalized path data.  For general-purpose lookups,
+        use the Entry(), Dir() and File() methods above.
+
+        This method does *no* input checking and will die or give
+        incorrect results if it's passed a non-normalized path name (e.g.,
+        a path containing '..'), an absolute path name, a top-relative
+        ('#foo') path name, or any kind of object.
+        """
+        name = self.labspath + '/' + name
+        return self.root._lookup_abs(name, klass, create)
 
     def link(self, srcdir, duplicate):
         """Set this directory as the build directory for the
@@ -1355,7 +1417,10 @@ class Dir(Base):
         while dir:
             for rep in dir.getRepositories():
                 result.append(rep.Dir(fname))
-            fname = dir.name + os.sep + fname
+            if fname == '.':
+                fname = dir.name
+            else:
+                fname = dir.name + os.sep + fname
             dir = dir.up()
 
         self._memo['get_all_rdirs'] = result
@@ -1379,6 +1444,17 @@ class Dir(Base):
     def rel_path(self, other):
         """Return a path to "other" relative to this directory.
         """
+
+	# This complicated and expensive method, which constructs relative
+	# paths between arbitrary Node.FS objects, is no longer used
+	# by SCons itself.  It was introduced to store dependency paths
+	# in .sconsign files relative to the target, but that ended up
+	# being significantly inefficient.
+        #
+	# We're continuing to support the method because some SConstruct
+	# files out there started using it when it was available, and
+	# we're all about backwards compatibility..
+
         try:
             memo_dict = self._memo['rel_path']
         except KeyError:
@@ -1416,7 +1492,7 @@ class Dir(Base):
 
             path_elems = ['..'] * (len(self.path_elements) - i) \
                          + map(lambda n: n.name, other.path_elements[i:])
-
+             
             result = string.join(path_elems, os.sep)
 
         memo_dict[other] = result
@@ -1452,11 +1528,22 @@ class Dir(Base):
         self.clear()
         return scanner(self, env, path)
 
+    #
+    # Taskmaster interface subsystem
+    #
+
+    def prepare(self):
+        pass
+
     def build(self, **kw):
         """A null "builder" for directories."""
         global MkdirBuilder
         if not self.builder is MkdirBuilder:
             apply(SCons.Node.Node.build, [self,], kw)
+
+    #
+    #
+    #
 
     def _create(self):
         """Create this directory, silently and without worrying about
@@ -1506,13 +1593,12 @@ class Dir(Base):
         contents = map(lambda n: n.get_contents(), self.children())
         return  string.join(contents, '')
 
-    def prepare(self):
-        pass
-
     def do_duplicate(self, src):
         pass
 
-    def current(self, calc=None):
+    changed_since_last_build = SCons.Node.Node.state_has_changed
+
+    def is_up_to_date(self):
         """If any child is not up-to-date, then this directory isn't,
         either."""
         if not self.builder is MkdirBuilder and not self.exists():
@@ -1560,6 +1646,9 @@ class Dir(Base):
     def entry_abspath(self, name):
         return self.abspath + os.sep + name
 
+    def entry_labspath(self, name):
+        return self.labspath + '/' + name
+
     def entry_path(self, name):
         return self.path + os.sep + name
 
@@ -1595,13 +1684,7 @@ class Dir(Base):
         dir = self
         while dir:
             if dir.srcdir:
-                d = dir.srcdir.Dir(dirname)
-                if d.is_under(dir):
-                    # Shouldn't source from something in the build path:
-                    # build_dir is probably under src_dir, in which case
-                    # we are reflecting.
-                    break
-                result.append(d)
+                result.append(dir.srcdir.Dir(dirname))
             dirname = dir.name + os.sep + dirname
             dir = dir.up()
 
@@ -1611,6 +1694,11 @@ class Dir(Base):
 
     def srcdir_duplicate(self, name):
         for dir in self.srcdir_list():
+            if self.is_under(dir):
+                # We shouldn't source from something in the build path;
+                # build_dir is probably under src_dir, in which case
+                # we are reflecting.
+                break
             if dir.entry_exists_on_disk(name):
                 srcnode = dir.Entry(name).disambiguate()
                 if self.duplicate:
@@ -1640,7 +1728,7 @@ class Dir(Base):
 
         def func(node):
             if (isinstance(node, File) or isinstance(node, Entry)) and \
-               (node.is_derived() or node.is_pseudo_derived() or node.exists()):
+               (node.is_derived() or node.exists()):
                     return node
             return None
 
@@ -1713,6 +1801,118 @@ class Dir(Base):
         for dirname in filter(select_dirs, names):
             entries[dirname].walk(func, arg)
 
+    def glob(self, pathname, ondisk=True, source=False, strings=False):
+        """
+        Returns a list of Nodes (or strings) matching a specified
+        pathname pattern.
+
+        Pathname patterns follow UNIX shell semantics:  * matches
+        any-length strings of any characters, ? matches any character,
+        and [] can enclose lists or ranges of characters.  Matches do
+        not span directory separators.
+
+        The matches take into account Repositories, returning local
+        Nodes if a corresponding entry exists in a Repository (either
+        an in-memory Node or something on disk).
+
+        By defafult, the glob() function matches entries that exist
+        on-disk, in addition to in-memory Nodes.  Setting the "ondisk"
+        argument to False (or some other non-true value) causes the glob()
+        function to only match in-memory Nodes.  The default behavior is
+        to return both the on-disk and in-memory Nodes.
+
+        The "source" argument, when true, specifies that corresponding
+        source Nodes must be returned if you're globbing in a build
+        directory (initialized with BuildDir()).  The default behavior
+        is to return Nodes local to the BuildDir().
+
+        The "strings" argument, when true, returns the matches as strings,
+        not Nodes.  The strings are path names relative to this directory.
+
+        The underlying algorithm is adapted from the glob.glob() function
+        in the Python library (but heavily modified), and uses fnmatch()
+        under the covers.
+        """
+        dirname, basename = os.path.split(pathname)
+        if not dirname:
+            return self._glob1(basename, ondisk, source, strings)
+        if has_glob_magic(dirname):
+            list = self.glob(dirname, ondisk, source, strings=False)
+        else:
+            list = [self.Dir(dirname, create=True)]
+        result = []
+        for dir in list:
+            r = dir._glob1(basename, ondisk, source, strings)
+            if strings:
+                r = map(lambda x, d=str(dir): os.path.join(d, x), r)
+            result.extend(r)
+        return result
+
+    def _glob1(self, pattern, ondisk=True, source=False, strings=False):
+        """
+        Globs for and returns a list of entry names matching a single
+        pattern in this directory.
+
+        This searches any repositories and source directories for
+        corresponding entries and returns a Node (or string) relative
+        to the current directory if an entry is found anywhere.
+
+        TODO: handle pattern with no wildcard
+        """
+        search_dir_list = self.get_all_rdirs()
+        for srcdir in self.srcdir_list():
+            search_dir_list.extend(srcdir.get_all_rdirs())
+
+        names = []
+        for dir in search_dir_list:
+            # We use the .name attribute from the Node because the keys of
+            # the dir.entries dictionary are normalized (that is, all upper
+            # case) on case-insensitive systems like Windows.
+            #node_names = [ v.name for k, v in dir.entries.items() if k not in ('.', '..') ]
+            entry_names = filter(lambda n: n not in ('.', '..'), dir.entries.keys())
+            node_names = map(lambda n, e=dir.entries: e[n].name, entry_names)
+            names.extend(node_names)
+            if ondisk:
+                try:
+                    disk_names = os.listdir(dir.abspath)
+                except os.error:
+                    pass
+                else:
+                    names.extend(disk_names)
+                    if not strings:
+                        # We're going to return corresponding Nodes in
+                        # the local directory, so we need to make sure
+                        # those Nodes exist.  We only want to create
+                        # Nodes for the entries that will match the
+                        # specified pattern, though, which means we
+                        # need to filter the list here, even though
+                        # the overall list will also be filtered later,
+                        # after we exit this loop.
+                        if pattern[0] != '.':
+                            #disk_names = [ d for d in disk_names if d[0] != '.' ]
+                            disk_names = filter(lambda x: x[0] != '.', disk_names)
+                        disk_names = fnmatch.filter(disk_names, pattern)
+                        rep_nodes = map(dir.Entry, disk_names)
+                        #rep_nodes = [ n.disambiguate() for n in rep_nodes ]
+                        rep_nodes = map(lambda n: n.disambiguate(), rep_nodes)
+                        for node, name in zip(rep_nodes, disk_names):
+                            n = self.Entry(name)
+                            if n.__class__ != node.__class__:
+                                n.__class__ = node.__class__
+                                n._morph()
+
+        names = set(names)
+        if pattern[0] != '.':
+            #names = [ n for n in names if n[0] != '.' ]
+            names = filter(lambda x: x[0] != '.', names)
+        names = fnmatch.filter(names, pattern)
+
+        if strings:
+            return names
+
+        #return [ self.entries[_my_normcase(n)] for n in names ]
+        return map(lambda n, e=self.entries:  e[_my_normcase(n)], names)
+
 class RootDir(Dir):
     """A class for the root directory of a file system.
 
@@ -1727,29 +1927,88 @@ class RootDir(Dir):
         # attribute) so we have to set up some values so Base.__init__()
         # won't gag won't it calls some of our methods.
         self.abspath = ''
+        self.labspath = ''
         self.path = ''
         self.tpath = ''
         self.path_elements = []
         self.duplicate = 0
+        self.root = self
         Base.__init__(self, name, self, fs)
 
         # Now set our paths to what we really want them to be: the
-        # initial drive letter (the name) plus the directory separator.
+        # initial drive letter (the name) plus the directory separator,
+        # except for the "lookup abspath," which does not have the
+        # drive letter.
         self.abspath = name + os.sep
+        self.labspath = '/'
         self.path = name + os.sep
         self.tpath = name + os.sep
         self._morph()
+
+        self._lookupDict = {}
+
+        # The // and os.sep + os.sep entries are necessary because
+        # os.path.normpath() seems to preserve double slashes at the
+        # beginning of a path (presumably for UNC path names), but
+        # collapses triple slashes to a single slash.
+        self._lookupDict['/'] = self
+        self._lookupDict['//'] = self
+        self._lookupDict[os.sep] = self
+        self._lookupDict[os.sep + os.sep] = self
 
     def must_be_same(self, klass):
         if klass is Dir:
             return
         Base.must_be_same(self, klass)
 
+    def _lookup_abs(self, p, klass, create=1):
+        """
+        Fast (?) lookup of a *normalized* absolute path.
+
+        This method is intended for use by internal lookups with
+        already-normalized path data.  For general-purpose lookups,
+        use the FS.Entry(), FS.Dir() or FS.File() methods.
+
+        The caller is responsible for making sure we're passed a
+        normalized absolute path; we merely let Python's dictionary look
+        up and return the One True Node.FS object for the path.
+
+        If no Node for the specified "p" doesn't already exist, and
+        "create" is specified, the Node may be created after recursive
+        invocation to find or create the parent directory or directories.
+        """
+        k = _my_normcase(p)
+        try:
+            result = self._lookupDict[k]
+        except KeyError:
+            if not create:
+                raise SCons.Errors.UserError
+            # There is no Node for this path name, and we're allowed
+            # to create it.
+            dir_name, file_name = os.path.split(p)
+            dir_node = self._lookup_abs(dir_name, Dir)
+            result = klass(file_name, dir_node, self.fs)
+            self._lookupDict[k] = result
+            dir_node.entries[_my_normcase(file_name)] = result
+            dir_node.implicit = None
+
+            # Double-check on disk (as configured) that the Node we
+            # created matches whatever is out there in the real world.
+            result.diskcheck_match()
+        else:
+            # There is already a Node for this path name.  Allow it to
+            # complain if we were looking for an inappropriate type.
+            result.must_be_same(klass)
+        return result
+
     def __str__(self):
         return self.abspath
 
     def entry_abspath(self, name):
         return self.abspath + name
+
+    def entry_labspath(self, name):
+        return self.labspath + name
 
     def entry_path(self, name):
         return self.path + name
@@ -1773,89 +2032,97 @@ class RootDir(Dir):
         return _null
 
 class FileNodeInfo(SCons.Node.NodeInfoBase):
-    def __init__(self, node):
-        SCons.Node.NodeInfoBase.__init__(self, node)
-        self.update(node)
-    def __cmp__(self, other):
-        try: return cmp(self.bsig, other.bsig)
-        except AttributeError: return 1
-    def update(self, node):
-        self.timestamp = node.get_timestamp()
-        self.size = node.getsize()
+    current_version_id = 1
+
+    field_list = ['csig', 'timestamp', 'size']
+
+    # This should get reset by the FS initialization.
+    fs = None
+
+    def str_to_node(self, s):
+        top = self.fs.Top
+        root = top.root
+        if do_splitdrive:
+            drive, s = os.path.splitdrive(s)
+            if drive:
+                root = self.fs.get_root(drive)
+        if not os.path.isabs(s):
+            s = top.labspath + '/' + s
+        return root._lookup_abs(s, Entry)
 
 class FileBuildInfo(SCons.Node.BuildInfoBase):
-    def __init__(self, node):
-        SCons.Node.BuildInfoBase.__init__(self, node)
-        self.node = node
+    current_version_id = 1
+
     def convert_to_sconsign(self):
-        """Convert this FileBuildInfo object for writing to a .sconsign file
-
-        We hung onto the node that we refer to so that we can translate
-        the lists of bsources, bdepends and bimplicit Nodes into strings
-        relative to the node, but we don't want to write out that Node
-        itself to the .sconsign file, so we delete the attribute in
-        preparation.
         """
-        rel_path = self.node.rel_path
-        delattr(self, 'node')
+        Converts this FileBuildInfo object for writing to a .sconsign file
+
+        This replaces each Node in our various dependency lists with its
+        usual string representation: relative to the top-level SConstruct
+        directory, or an absolute path if it's outside.
+        """
+        if os.sep == '/':
+            node_to_str = str
+        else:
+            def node_to_str(n):
+                try:
+                    s = n.path
+                except AttributeError:
+                    s = str(n)
+                else:
+                    s = string.replace(s, os.sep, '/')
+                return s
         for attr in ['bsources', 'bdepends', 'bimplicit']:
             try:
                 val = getattr(self, attr)
             except AttributeError:
                 pass
             else:
-                setattr(self, attr, map(rel_path, val))
+                setattr(self, attr, map(node_to_str, val))
     def convert_from_sconsign(self, dir, name):
-        """Convert a newly-read FileBuildInfo object for in-SCons use
-
-        An on-disk BuildInfo comes without a reference to the node for
-        which it's intended, so we have to convert the arguments and add
-        back a self.node attribute.  We don't worry here about converting
-        the bsources, bdepends and bimplicit lists from strings to Nodes
-        because they're not used in the normal case of just deciding
-        whether or not to rebuild things.
         """
-        self.node = dir.Entry(name)
+        Converts a newly-read FileBuildInfo object for in-SCons use
+
+        For normal up-to-date checking, we don't have any conversion to
+        perform--but we're leaving this method here to make that clear.
+        """
+        pass
     def prepare_dependencies(self):
-        """Prepare a FileBuildInfo object for explaining what changed
-
-        The bsources, bdepends and bimplicit lists have all been stored
-        on disk as paths relative to the Node for which they're stored
-        as dependency info.  Convert the strings to actual Nodes (for
-        use by the --debug=explain code and --implicit-cache).
         """
-        def str_to_node(s, entry=self.node.dir.Entry):
-            # This is a little bogus; we're going to mimic the lookup
-            # order of env.arg2nodes() by hard-coding an Alias lookup
-            # before we assume it's an Entry.  This should be able to
-            # go away once the Big Signature Refactoring pickles the
-            # actual NodeInfo object, which will let us know precisely
-            # what type of Node to turn it into.
-            import SCons.Node.Alias
-            n = SCons.Node.Alias.default_ans.lookup(s)
-            if not n:
-                n = entry(s)
-            return n
-        for attr in ['bsources', 'bdepends', 'bimplicit']:
+        Prepares a FileBuildInfo object for explaining what changed
+
+        The bsources, bdepends and bimplicit lists have all been
+        stored on disk as paths relative to the top-level SConstruct
+        directory.  Convert the strings to actual Nodes (for use by the
+        --debug=explain code and --implicit-cache).
+        """
+        attrs = [
+            ('bsources', 'bsourcesigs'),
+            ('bdepends', 'bdependsigs'),
+            ('bimplicit', 'bimplicitsigs'),
+        ]
+        for (nattr, sattr) in attrs:
             try:
-                val = getattr(self, attr)
+                strings = getattr(self, nattr)
+                nodeinfos = getattr(self, sattr)
             except AttributeError:
                 pass
             else:
-                setattr(self, attr, map(str_to_node, val))
-    def format(self):
-        result = [ self.ninfo.format() ]
+                nodes = []
+                for s, ni in zip(strings, nodeinfos):
+                    if not isinstance(s, SCons.Node.Node):
+                        s = ni.str_to_node(s)
+                    nodes.append(s)
+                setattr(self, nattr, nodes)
+    def format(self, names=0):
+        result = []
         bkids = self.bsources + self.bdepends + self.bimplicit
         bkidsigs = self.bsourcesigs + self.bdependsigs + self.bimplicitsigs
-        for i in xrange(len(bkids)):
-            result.append(str(bkids[i]) + ': ' + bkidsigs[i].format())
+        for bkid, bkidsig in zip(bkids, bkidsigs):
+            result.append(str(bkid) + ': ' +
+                          string.join(bkidsig.format(names=names), ' '))
+        result.append('%s [%s]' % (self.bactsig, self.bact))
         return string.join(result, '\n')
-
-class NodeInfo(FileNodeInfo):
-    pass
-
-class BuildInfo(FileBuildInfo):
-    pass
 
 class File(Base):
     """A class for files in a file system.
@@ -1880,10 +2147,10 @@ class File(Base):
         the SConscript directory of this file."""
         return self.cwd.Entry(name)
 
-    def Dir(self, name):
+    def Dir(self, name, create=True):
         """Create a directory node named 'name' relative to
         the SConscript directory of this file."""
-        return self.cwd.Dir(name)
+        return self.cwd.Dir(name, create)
 
     def Dirs(self, pathlist):
         """Create a list of directories relative to the SConscript
@@ -1908,6 +2175,19 @@ class File(Base):
         if not hasattr(self, '_local'):
             self._local = 0
 
+        # If there was already a Builder set on this entry, then
+        # we need to make sure we call the target-decider function,
+        # not the source-decider.  Reaching in and doing this by hand
+        # is a little bogus.  We'd prefer to handle this by adding
+        # an Entry.builder_set() method that disambiguates like the
+        # other methods, but that starts running into problems with the
+        # fragile way we initialize Dir Nodes with their Mkdir builders,
+        # yet still allow them to be overridden by the user.  Since it's
+        # not clear right now how to fix that, stick with what works
+        # until it becomes clear...
+        if self.has_builder():
+            self.changed_since_last_build = self.decide_target
+
     def scanner_key(self):
         return self.get_suffix()
 
@@ -1923,41 +2203,192 @@ class File(Base):
             raise
         return r
 
-    def get_timestamp(self):
-        if self.rexists():
-            return self.rfile().getmtime()
-        else:
-            return 0
+    memoizer_counters.append(SCons.Memoize.CountValue('get_size'))
 
-    def store_info(self, obj):
+    def get_size(self):
+        try:
+            return self._memo['get_size']
+        except KeyError:
+            pass
+
+        if self.rexists():
+            size = self.rfile().getsize()
+        else:
+            size = 0
+
+        self._memo['get_size'] = size
+
+        return size
+
+    memoizer_counters.append(SCons.Memoize.CountValue('get_timestamp'))
+
+    def get_timestamp(self):
+        try:
+            return self._memo['get_timestamp']
+        except KeyError:
+            pass
+
+        if self.rexists():
+            timestamp = self.rfile().getmtime()
+        else:
+            timestamp = 0
+
+        self._memo['get_timestamp'] = timestamp
+
+        return timestamp
+
+    def store_info(self):
         # Merge our build information into the already-stored entry.
         # This accomodates "chained builds" where a file that's a target
         # in one build (SConstruct file) is a source in a different build.
         # See test/chained-build.py for the use case.
-        entry = self.get_stored_info()
-        entry.merge(obj)
-        self.dir.sconsign().set_entry(self.name, entry)
+        self.dir.sconsign().store_info(self.name, self)
+
+    convert_copy_attrs = [
+        'bsources',
+        'bimplicit',
+        'bdepends',
+        'bact',
+        'bactsig',
+        'ninfo',
+    ]
+
+
+    convert_sig_attrs = [
+        'bsourcesigs',
+        'bimplicitsigs',
+        'bdependsigs',
+    ]
+
+    def convert_old_entry(self, old_entry):
+        # Convert a .sconsign entry from before the Big Signature
+        # Refactoring, doing what we can to convert its information
+        # to the new .sconsign entry format.
+        #
+        # The old format looked essentially like this:
+        #
+        #   BuildInfo
+        #       .ninfo (NodeInfo)
+        #           .bsig
+        #           .csig
+        #           .timestamp
+        #           .size
+        #       .bsources
+        #       .bsourcesigs ("signature" list)
+        #       .bdepends
+        #       .bdependsigs ("signature" list)
+        #       .bimplicit
+        #       .bimplicitsigs ("signature" list)
+        #       .bact
+        #       .bactsig
+        #
+        # The new format looks like this:
+        #
+        #   .ninfo (NodeInfo)
+        #       .bsig
+        #       .csig
+        #       .timestamp
+        #       .size
+        #   .binfo (BuildInfo)
+        #       .bsources
+        #       .bsourcesigs (NodeInfo list)
+        #           .bsig
+        #           .csig
+        #           .timestamp
+        #           .size
+        #       .bdepends
+        #       .bdependsigs (NodeInfo list)
+        #           .bsig
+        #           .csig
+        #           .timestamp
+        #           .size
+        #       .bimplicit
+        #       .bimplicitsigs (NodeInfo list)
+        #           .bsig
+        #           .csig
+        #           .timestamp
+        #           .size
+        #       .bact
+        #       .bactsig
+        #
+        # The basic idea of the new structure is that a NodeInfo always
+        # holds all available information about the state of a given Node
+        # at a certain point in time.  The various .b*sigs lists can just
+        # be a list of pointers to the .ninfo attributes of the different
+        # dependent nodes, without any copying of information until it's
+        # time to pickle it for writing out to a .sconsign file.
+        #
+        # The complicating issue is that the *old* format only stored one
+        # "signature" per dependency, based on however the *last* build
+        # was configured.  We don't know from just looking at it whether
+        # it was a build signature, a content signature, or a timestamp
+        # "signature".  Since we no longer use build signatures, the
+        # best we can do is look at the length and if it's thirty two,
+        # assume that it was (or might have been) a content signature.
+        # If it was actually a build signature, then it will cause a
+        # rebuild anyway when it doesn't match the new content signature,
+        # but that's probably the best we can do.
+        import SCons.SConsign
+        new_entry = SCons.SConsign.SConsignEntry()
+        new_entry.binfo = self.new_binfo()
+        binfo = new_entry.binfo
+        for attr in self.convert_copy_attrs:
+            try:
+                value = getattr(old_entry, attr)
+            except AttributeError:
+                pass
+            else:
+                setattr(binfo, attr, value)
+                delattr(old_entry, attr)
+        for attr in self.convert_sig_attrs:
+            try:
+                sig_list = getattr(old_entry, attr)
+            except AttributeError:
+                pass
+            else:
+                value = []
+                for sig in sig_list:
+                    ninfo = self.new_ninfo()
+                    if len(sig) == 32:
+                        ninfo.csig = sig
+                    else:
+                        ninfo.timestamp = sig
+                    value.append(ninfo)
+                setattr(binfo, attr, value)
+                delattr(old_entry, attr)
+        return new_entry
+
+    memoizer_counters.append(SCons.Memoize.CountValue('get_stored_info'))
 
     def get_stored_info(self):
         try:
-            stored = self.dir.sconsign().get_entry(self.name)
+            return self._memo['get_stored_info']
+        except KeyError:
+            pass
+
+        try:
+            sconsign_entry = self.dir.sconsign().get_entry(self.name)
         except (KeyError, OSError):
-            return self.new_binfo()
+            import SCons.SConsign
+            sconsign_entry = SCons.SConsign.SConsignEntry()
+            sconsign_entry.binfo = self.new_binfo()
+            sconsign_entry.ninfo = self.new_ninfo()
         else:
-            if not hasattr(stored, 'ninfo'):
-                # Transition:  The .sconsign file entry has no NodeInfo
-                # object, which means it's a slightly older BuildInfo.
-                # Copy over the relevant attributes.
-                ninfo = stored.ninfo = self.new_ninfo()
-                for attr in ninfo.__dict__.keys():
-                    try:
-                        setattr(ninfo, attr, getattr(stored, attr))
-                    except AttributeError:
-                        pass
-            return stored
+            if isinstance(sconsign_entry, FileBuildInfo):
+                # This is a .sconsign file from before the Big Signature
+                # Refactoring; convert it as best we can.
+                sconsign_entry = self.convert_old_entry(sconsign_entry)
+            try:
+                delattr(sconsign_entry.ninfo, 'bsig')
+            except AttributeError:
+                pass
+
+        self._memo['get_stored_info'] = sconsign_entry
+
+        return sconsign_entry
 
     def get_stored_implicit(self):
-        binfo = self.get_stored_info()
+        binfo = self.get_stored_info().binfo
         binfo.prepare_dependencies()
         try: return binfo.bimplicit
         except AttributeError: return None
@@ -2037,6 +2468,63 @@ class File(Base):
         if self.exists():
             self.get_build_env().get_CacheDir().push_if_forced(self)
 
+        ninfo = self.get_ninfo()
+        old = self.get_stored_info()
+
+        csig = None
+        mtime = self.get_timestamp()
+        size = self.get_size()
+
+        max_drift = self.fs.max_drift
+        if max_drift > 0:
+            if (time.time() - mtime) > max_drift:
+                try:
+                    n = old.ninfo
+                    if n.timestamp and n.csig and n.timestamp == mtime:
+                        csig = n.csig
+                except AttributeError:
+                    pass
+        elif max_drift == 0:
+            try:
+                csig = old.ninfo.csig
+            except AttributeError:
+                pass
+
+        if csig:
+            ninfo.csig = csig
+
+        ninfo.timestamp = mtime
+        ninfo.size = size
+
+        if not self.has_builder():
+            # This is a source file, but it might have been a target file
+            # in another build that included more of the DAG.  Copy
+            # any build information that's stored in the .sconsign file
+            # into our binfo object so it doesn't get lost.
+            self.get_binfo().__dict__.update(old.binfo.__dict__)
+
+        self.store_info()
+
+    def find_src_builder(self):
+        if self.rexists():
+            return None
+        scb = self.dir.src_builder()
+        if scb is _null:
+            if diskcheck_sccs(self.dir, self.name):
+                scb = get_DefaultSCCSBuilder()
+            elif diskcheck_rcs(self.dir, self.name):
+                scb = get_DefaultRCSBuilder()
+            else:
+                scb = None
+        if scb is not None:
+            try:
+                b = self.builder
+            except AttributeError:
+                b = None
+            if b is None:
+                self.builder_set(scb)
+        return scb
+
     def has_src_builder(self):
         """Return whether this Node has a source builder or not.
 
@@ -2051,20 +2539,7 @@ class File(Base):
         try:
             scb = self.sbuilder
         except AttributeError:
-            if self.rexists():
-                scb = None
-            else:
-                scb = self.dir.src_builder()
-                if scb is _null:
-                    if diskcheck_sccs(self.dir, self.name):
-                        scb = get_DefaultSCCSBuilder()
-                    elif diskcheck_rcs(self.dir, self.name):
-                        scb = get_DefaultRCSBuilder()
-                    else:
-                        scb = None
-                if scb is not None:
-                    self.builder_set(scb)
-            self.sbuilder = scb
+            scb = self.sbuilder = self.find_src_builder()
         return not scb is None
 
     def alter_targets(self):
@@ -2074,12 +2549,19 @@ class File(Base):
             return [], None
         return self.fs.build_dir_target_climb(self, self.dir, [self.name])
 
-    def is_pseudo_derived(self):
-        return self.has_src_builder()
-
     def _rmv_existing(self):
         self.clear_memoized_values()
-        Unlink(self, [], None)
+        e = Unlink(self, [], None)
+        if isinstance(e, SCons.Errors.BuildError):
+            raise e
+
+    #
+    # Taskmaster interface subsystem
+    #
+
+    def make_ready(self):
+        self.has_src_builder()
+        self.get_binfo()
 
     def prepare(self):
         """Prepare for this file to be created."""
@@ -2096,6 +2578,10 @@ class File(Base):
                     desc = "No drive `%s' for target `%s'." % (drive, self)
                     raise SCons.Errors.StopError, desc
 
+    #
+    #
+    #
+
     def remove(self):
         """Remove this file."""
         if self.exists() or self.islink():
@@ -2105,13 +2591,9 @@ class File(Base):
 
     def do_duplicate(self, src):
         self._createDir()
-        try:
-            Unlink(self, None, None)
-        except SCons.Errors.BuildError:
-            pass
-        try:
-            Link(self, src, None)
-        except SCons.Errors.BuildError, e:
+        Unlink(self, None, None)
+        e = Link(self, src, None)
+        if isinstance(e, SCons.Errors.BuildError):
             desc = "Cannot duplicate `%s' in `%s': %s." % (src.path, self.dir.path, e.errstr)
             raise SCons.Errors.StopError, desc
         self.linked = 1
@@ -2156,7 +2638,7 @@ class File(Base):
     # SIGNATURE SUBSYSTEM
     #
 
-    def get_csig(self, calc=None):
+    def get_csig(self):
         """
         Generate a node's content signature, the digested signature
         of its content.
@@ -2165,74 +2647,103 @@ class File(Base):
         cache - alternate node to use for the signature cache
         returns - the content signature
         """
+        ninfo = self.get_ninfo()
         try:
-            return self.binfo.ninfo.csig
+            return ninfo.csig
         except AttributeError:
             pass
 
-        if calc is None:
-            calc = self.calculator()
+        try:
+            contents = self.get_contents()
+        except IOError:
+            # This can happen if there's actually a directory on-disk,
+            # which can be the case if they've disabled disk checks,
+            # or if an action with a File target actually happens to
+            # create a same-named directory by mistake.
+            csig = ''
+        else:
+            csig = SCons.Util.MD5signature(contents)
 
-        max_drift = self.fs.max_drift
-        mtime = self.get_timestamp()
-        use_stored = max_drift >= 0 and (time.time() - mtime) > max_drift
-
-        csig = None
-        if use_stored:
-            old = self.get_stored_info().ninfo
-            try:
-                if old.timestamp and old.csig and old.timestamp == mtime:
-                    csig = old.csig
-            except AttributeError:
-                pass
-        if csig is None:
-            csig = calc.module.signature(self)
-
-        binfo = self.get_binfo()
-        ninfo = binfo.ninfo
         ninfo.csig = csig
-        ninfo.update(self)
-
-        if use_stored:
-            self.store_info(binfo)
 
         return csig
 
     #
-    #
+    # DECISION SUBSYSTEM
     #
 
-    def is_up_to_date(self, node=None, bi=None):
-        """Returns if the node is up-to-date with respect to stored
-        BuildInfo.  The default is to compare it against our own
-        previously stored BuildInfo, but the stored BuildInfo from another
-        Node (typically one in a Repository) can be used instead."""
-        if bi is None:
-            if node is None:
-                node = self
-            bi = node.get_stored_info()
-        new = self.get_binfo()
-        return new == bi
+    def builder_set(self, builder):
+        SCons.Node.Node.builder_set(self, builder)
+        self.changed_since_last_build = self.decide_target
 
-    def current(self, calc=None):
-        self.binfo = self.gen_binfo(calc)
-        return self._cur2()
-    def _cur2(self):
+    def changed_content(self, target, prev_ni):
+        cur_csig = self.get_csig()
+        try:
+            return cur_csig != prev_ni.csig
+        except AttributeError:
+            return 1
+
+    def changed_state(self, target, prev_ni):
+        return (self.state != SCons.Node.up_to_date)
+
+    def changed_timestamp_then_content(self, target, prev_ni):
+        if not self.changed_timestamp_match(target, prev_ni):
+            try:
+                self.get_ninfo().csig = prev_ni.csig
+            except AttributeError:
+                pass
+            return False
+        return self.changed_content(target, prev_ni)
+
+    def changed_timestamp_newer(self, target, prev_ni):
+        try:
+            return self.get_timestamp() > target.get_timestamp()
+        except AttributeError:
+            return 1
+
+    def changed_timestamp_match(self, target, prev_ni):
+        try:
+            return self.get_timestamp() != prev_ni.timestamp
+        except AttributeError:
+            return 1
+
+    def decide_source(self, target, prev_ni):
+        return target.get_build_env().decide_source(self, target, prev_ni)
+
+    def decide_target(self, target, prev_ni):
+        return target.get_build_env().decide_target(self, target, prev_ni)
+
+    # Initialize this Node's decider function to decide_source() because
+    # every file is a source file until it has a Builder attached...
+    changed_since_last_build = decide_source
+
+    def is_up_to_date(self):
+        T = 0
+        if T: Trace('is_up_to_date(%s):' % self)
         if not self.exists():
+            if T: Trace(' not self.exists():')
             # The file doesn't exist locally...
             r = self.rfile()
             if r != self:
                 # ...but there is one in a Repository...
-                if self.is_up_to_date(r):
+                if not self.changed(r):
+                    if T: Trace(' changed(%s):' % r)
                     # ...and it's even up-to-date...
                     if self._local:
                         # ...and they'd like a local copy.
-                        LocalCopy(self, r, None)
-                        self.store_info(self.get_binfo())
+                        e = LocalCopy(self, r, None)
+                        if isinstance(e, SCons.Errors.BuildError):
+                            raise 
+                        self.store_info()
+                    if T: Trace(' 1\n')
                     return 1
+            self.changed()
+            if T: Trace(' None\n')
             return None
         else:
-            return self.is_up_to_date()
+            r = self.changed()
+            if T: Trace(' self.exists():  %s\n' % r)
+            return not r
 
     memoizer_counters.append(SCons.Memoize.CountValue('rfile'))
 
@@ -2258,19 +2769,49 @@ class File(Base):
     def rstr(self):
         return str(self.rfile())
 
+    def get_cachedir_csig(self):
+        """
+        Fetch a Node's content signature for purposes of computing
+        another Node's cachesig.
+
+        This is a wrapper around the normal get_csig() method that handles
+        the somewhat obscure case of using CacheDir with the -n option.
+        Any files that don't exist would normally be "built" by fetching
+        them from the cache, but the normal get_csig() method will try
+        to open up the local file, which doesn't exist because the -n
+        option meant we didn't actually pull the file from cachedir.
+        But since the file *does* actually exist in the cachedir, we
+        can use its contents for the csig.
+        """
+        try:
+            return self.cachedir_csig
+        except AttributeError:
+            pass
+
+        cachedir, cachefile = self.get_build_env().get_CacheDir().cachepath(self)
+        if not self.exists() and cachefile and os.path.exists(cachefile):
+            contents = open(cachefile, 'rb').read()
+            self.cachedir_csig = SCons.Util.MD5signature(contents)
+        else:
+            self.cachedir_csig = self.get_csig()
+        return self.cachedir_csig
+
     def get_cachedir_bsig(self):
-        import SCons.Sig.MD5
-        ninfo = self.get_binfo().ninfo
-        if not hasattr(ninfo, 'bsig'):
-            import SCons.Errors
-            raise SCons.Errors.InternalError, "cachepath(%s) found no bsig" % self.path
-        elif ninfo.bsig is None:
-            import SCons.Errors
-            raise SCons.Errors.InternalError, "cachepath(%s) found a bsig of None" % self.path
+        try:
+            return self.cachesig
+        except AttributeError:
+            pass
+
         # Add the path to the cache signature, because multiple
         # targets built by the same action will all have the same
         # build signature, and we have to differentiate them somehow.
-        return SCons.Sig.MD5.collect([ninfo.bsig, self.path])
+        children =  self.children()
+        sigs = map(lambda n: n.get_cachedir_csig(), children)
+        executor = self.get_executor()
+        sigs.append(SCons.Util.MD5signature(executor.get_contents()))
+        sigs.append(self.path)
+        self.cachesig = SCons.Util.MD5collect(sigs)
+        return self.cachesig
 
 default_fs = None
 
@@ -2290,6 +2831,39 @@ class FileFinder:
 
     def __init__(self):
         self._memo = {}
+
+    def filedir_lookup(self, p, fd=None):
+        """
+        A helper method for find_file() that looks up a directory for
+        a file we're trying to find.  This only creates the Dir Node if
+        it exists on-disk, since if the directory doesn't exist we know
+        we won't find any files in it...  :-)
+
+        It would be more compact to just use this as a nested function
+        with a default keyword argument (see the commented-out version
+        below), but that doesn't work unless you have nested scopes,
+        so we define it here just this works work under Python 1.5.2.
+        """
+        if fd is None:
+            fd = self.default_filedir
+        dir, name = os.path.split(fd)
+        drive, d = os.path.splitdrive(dir)
+        if d in ('/', os.sep):
+            return p
+        if dir:
+            p = self.filedir_lookup(p, dir)
+            if not p:
+                return None
+        norm_name = _my_normcase(name)
+        try:
+            node = p.entries[norm_name]
+        except KeyError:
+            return p.dir_on_disk(name)
+        # Once we move to Python 2.2 we can do:
+        #if isinstance(node, (Dir, Entry)):
+        if isinstance(node, Dir) or isinstance(node, Entry):
+            return node
+        return None
 
     def _find_file_key(self, filename, paths, verbose=None):
         return (filename, paths)
@@ -2336,14 +2910,35 @@ class FileFinder:
 
         filedir, filename = os.path.split(filename)
         if filedir:
-            def filedir_lookup(p, fd=filedir):
-                try:
-                    return p.Dir(fd)
-                except TypeError:
-                    # We tried to look up a Dir, but it seems there's
-                    # already a File (or something else) there.  No big.
-                    return None
-            paths = filter(None, map(filedir_lookup, paths))
+            # More compact code that we can't use until we drop
+            # support for Python 1.5.2:
+            #
+            #def filedir_lookup(p, fd=filedir):
+            #    """
+            #    A helper function that looks up a directory for a file
+            #    we're trying to find.  This only creates the Dir Node
+            #    if it exists on-disk, since if the directory doesn't
+            #    exist we know we won't find any files in it...  :-)
+            #    """
+            #    dir, name = os.path.split(fd)
+            #    if dir:
+            #        p = filedir_lookup(p, dir)
+            #        if not p:
+            #            return None
+            #    norm_name = _my_normcase(name)
+            #    try:
+            #        node = p.entries[norm_name]
+            #    except KeyError:
+            #        return p.dir_on_disk(name)
+            #    # Once we move to Python 2.2 we can do:
+            #    #if isinstance(node, (Dir, Entry)):
+            #    if isinstance(node, Dir) or isinstance(node, Entry):
+            #        return node
+            #    return None
+            #paths = filter(None, map(filedir_lookup, paths))
+
+            self.default_filedir = filedir
+            paths = filter(None, map(self.filedir_lookup, paths))
 
         result = None
         for dir in paths:

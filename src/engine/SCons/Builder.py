@@ -39,9 +39,6 @@ used by other modules:
         variable.  This also takes care of warning about possible mistakes
         in keyword arguments.
 
-    targets()
-        Returns the list of targets for a specific builder instance.
-
     add_emitter()
         Adds an emitter for a specific file suffix, used by some Tool
         modules to specify that (for example) a yacc invocation on a .y
@@ -559,7 +556,7 @@ class BuilderBase:
                 if not tgt is None: tgt = [tgt]
                 if not src is None: src = [src]
                 result.extend(self._execute(env, tgt, src, overwarn))
-            return result
+            return SCons.Node.NodeList(result)
 
         overwarn.warn()
 
@@ -661,13 +658,6 @@ class BuilderBase:
             return ''
         return ret[0]
 
-    def targets(self, node):
-        """Return the list of targets for this builder instance.
-
-        For most normal builders, this is just the supplied node.
-        """
-        return [ node ]
-
     def add_emitter(self, suffix, emitter):
         """Add a suffix-emitter mapping to this Builder.
 
@@ -677,16 +667,6 @@ class BuilderBase:
         appropriate method to call for the Builder in question.
         """
         self.emitter[suffix] = emitter
-
-    def push_emitter(self, emitter):
-        """Add a emitter to the beginning of the emitter list of this Builder.
-
-        This creates an empty list if the emitter is None.
-        """
-        if not self.emitter:
-            self.emitter = ListEmitter( [emitter] )
-        else:
-            self.emitter.insert(0, emitter)
 
     def add_src_builder(self, builder):
         """

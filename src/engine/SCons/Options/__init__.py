@@ -29,8 +29,11 @@ customizable variables to an SCons build.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+import SCons.compat
+
 import os.path
 import string
+import sys
 
 import SCons.Errors
 import SCons.Util
@@ -50,7 +53,7 @@ class Options:
     Holds all the options, updates the environment with the variables,
     and renders the help text.
     """
-    def __init__(self, files=None, args={}, is_global=1):
+    def __init__(self, files=[], args={}, is_global=1):
         """
         files - [optional] List of option configuration files to load
             (backward compatibility) If a single string is passed it is
@@ -58,11 +61,13 @@ class Options:
         """
         self.options = []
         self.args = args
-        self.files = None
-        if SCons.Util.is_String(files):
-            self.files = [ files ]
-        elif files:
-            self.files = files
+        if not SCons.Util.is_List(files):
+            if files:
+                files = [ files ]
+            else:
+                files = []
+        self.files = files
+        self.unknown = {}
 
         # create the singleton instance
         if is_global:
@@ -155,19 +160,31 @@ class Options:
                 values[option.key] = option.default
 
         # next set the value specified in the options file
-        if self.files:
-           for filename in self.files:
-              if os.path.exists(filename):
-                 execfile(filename, values)
+        for filename in self.files:
+            if os.path.exists(filename):
+                dir = os.path.split(os.path.abspath(filename))[0]
+                if dir:
+                    sys.path.insert(0, dir)
+                try:
+                    values['__name__'] = filename
+                    execfile(filename, {}, values)
+                finally:
+                    if dir:
+                        del sys.path[0]
+                    del values['__name__']
 
-        # finally set the values specified on the command line
+        # set the values specified on the command line
         if args is None:
             args = self.args
 
         for arg, value in args.items():
-          for option in self.options:
-            if arg in option.aliases + [ option.key ]:
-              values[option.key]=value
+            added = False
+            for option in self.options:
+                if arg in option.aliases + [ option.key ]:
+                    values[option.key] = value
+                    added = True
+            if not added:
+                self.unknown[arg] = value
 
         # put the variables in the environment:
         # (don't copy over variables that are not declared as options)
@@ -194,6 +211,13 @@ class Options:
         for option in self.options:
             if option.validator and values.has_key(option.key):
                 option.validator(option.key, env.subst('${%s}'%option.key), env)
+
+    def UnknownOptions(self):
+        """
+        Returns any options in the specified arguments lists that
+        were not known, declared options in this object.
+        """
+        return self.unknown
 
     def Save(self, filename, env):
         """

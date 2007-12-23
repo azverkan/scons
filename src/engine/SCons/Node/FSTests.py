@@ -35,6 +35,7 @@ import stat
 
 import SCons.Errors
 import SCons.Node.FS
+import SCons.Util
 import SCons.Warnings
 
 built_it = None
@@ -80,15 +81,21 @@ class Environment:
         pass
 
 class Action:
-    def __call__(self, targets, sources, env, errfunc, **kw):
+    def __call__(self, targets, sources, env, **kw):
         global built_it
         if kw.get('execute', 1):
             built_it = 1
         return 0
     def show(self, string):
         pass
+    def get_contents(self, target, source, env):
+        return ""
+    def genstring(self, target, source, env):
+        return ""
     def strfunction(self, targets, sources, env):
         return ""
+    def get_implicit_deps(self, target, source, env):
+        return []
 
 class Builder:
     def __init__(self, factory, action=Action()):
@@ -281,8 +288,9 @@ class BuildDirTestCase(unittest.TestCase):
 
         assert not f7.exists()
         assert f7.rexists()
-        assert f7.rfile().path == os.path.normpath(test.workpath('rep1/build/var1/test2.out')),\
-               f7.rfile().path
+        r = f7.rfile().path
+        expect = os.path.normpath(test.workpath('rep1/build/var1/test2.out'))
+        assert r == expect, (repr(r), repr(expect))
 
         assert not f8.exists()
         assert f8.rexists()
@@ -296,7 +304,7 @@ class BuildDirTestCase(unittest.TestCase):
         class MkdirAction(Action):
             def __init__(self, dir_made):
                 self.dir_made = dir_made
-            def __call__(self, target, source, env, errfunc):
+            def __call__(self, target, source, env):
                 self.dir_made.extend(target)
 
         save_Link = SCons.Node.FS.Link
@@ -527,6 +535,8 @@ class BuildDirTestCase(unittest.TestCase):
                 'work/src/b1/b2',
                 'work/src/b1/b2/b1',
                 'work/src/b1/b2/b1/b2',
+                'work/src/b1/b2/b1/b2/b1',
+                'work/src/b1/b2/b1/b2/b1/b2',
         ]
 
         srcnode_map = {
@@ -536,6 +546,10 @@ class BuildDirTestCase(unittest.TestCase):
                 'work/src/b1/b2/b1/f' : 'work/src/b1/f',
                 'work/src/b1/b2/b1/b2' : 'work/src/b1/b2',
                 'work/src/b1/b2/b1/b2/f' : 'work/src/b1/b2/f',
+                'work/src/b1/b2/b1/b2/b1' : 'work/src/b1/b2/b1',
+                'work/src/b1/b2/b1/b2/b1/f' : 'work/src/b1/b2/b1/f',
+                'work/src/b1/b2/b1/b2/b1/b2' : 'work/src/b1/b2/b1/b2',
+                'work/src/b1/b2/b1/b2/b1/b2/f' : 'work/src/b1/b2/b1/b2/f',
         }
 
         alter_map = {
@@ -697,37 +711,7 @@ class FileNodeInfoTestCase(_tempdirTestCase):
         """Test FileNodeInfo initialization"""
         fff = self.fs.File('fff')
         ni = SCons.Node.FS.FileNodeInfo(fff)
-        assert hasattr(ni, 'timestamp')
-        assert hasattr(ni, 'size')
-
-    def test___cmp__(self):
-        """Test comparing File.NodeInfo objects"""
-        f1 = self.fs.File('f1')
-        f2 = self.fs.File('f2')
-
-        ni1 = SCons.Node.FS.FileNodeInfo(f1)
-        ni2 = SCons.Node.FS.FileNodeInfo(f2)
-
-        msg = "cmp(%s, %s) returned %s, not %s"
-
-        c = cmp(ni1, ni2)
-        assert c == 1, msg % (ni1, ni2, c, 1)
-
-        ni1.bsig = 777
-        c = cmp(ni1, ni2)
-        assert c == 1, msg % (ni1.bsig, ni2, c, 1)
-
-        ni2.bsig = 666
-        c = cmp(ni1, ni2)
-        assert c == 1, msg % (ni1.bsig, ni2.bsig, c, 1)
-
-        ni2.bsig = 777
-        c = cmp(ni1, ni2)
-        assert c == 0, msg % (ni1.bsig, ni2.bsig, c, 0)
-
-        ni2.bsig = 888
-        c = cmp(ni1, ni2)
-        assert c == -1, msg % (ni1.bsig, ni2.bsig, c, -1)
+        assert isinstance(ni, SCons.Node.FS.FileNodeInfo)
 
     def test_update(self):
         """Test updating a File.NodeInfo with on-disk information"""
@@ -736,10 +720,29 @@ class FileNodeInfoTestCase(_tempdirTestCase):
 
         ni = SCons.Node.FS.FileNodeInfo(fff)
 
+        test.write('fff', "fff\n")
+
+        st = os.stat('fff')
+
+        ni.update(fff)
+
+        assert hasattr(ni, 'timestamp')
+        assert hasattr(ni, 'size')
+
+        ni.timestamp = 0
+        ni.size = 0
+
+        ni.update(fff)
+
+        mtime = st[stat.ST_MTIME]
+        assert ni.timestamp == mtime, (ni.timestamp, mtime)
+        size = st[stat.ST_SIZE]
+        assert ni.size == size, (ni.size, size)
+
         import time
         time.sleep(2)
 
-        test.write('fff', "fff\n")
+        test.write('fff', "fff longer size, different time stamp\n")
 
         st = os.stat('fff')
 
@@ -748,22 +751,22 @@ class FileNodeInfoTestCase(_tempdirTestCase):
         size = st[stat.ST_SIZE]
         assert ni.size != size, (ni.size, size)
 
-        fff.clear()
-        ni.update(fff)
+        #fff.clear()
+        #ni.update(fff)
 
-        st = os.stat('fff')
+        #st = os.stat('fff')
 
-        mtime = st[stat.ST_MTIME]
-        assert ni.timestamp == mtime, (ni.timestamp, mtime)
-        size = st[stat.ST_SIZE]
-        assert ni.size == size, (ni.size, size)
+        #mtime = st[stat.ST_MTIME]
+        #assert ni.timestamp == mtime, (ni.timestamp, mtime)
+        #size = st[stat.ST_SIZE]
+        #assert ni.size == size, (ni.size, size)
 
 class FileBuildInfoTestCase(_tempdirTestCase):
     def test___init__(self):
         """Test File.BuildInfo initialization"""
         fff = self.fs.File('fff')
-        bi = SCons.Node.FS.BuildInfo(fff)
-        assert bi.node is fff, bi.node
+        bi = SCons.Node.FS.FileBuildInfo(fff)
+        assert bi, bi
 
     def test_convert_to_sconsign(self):
         """Test converting to .sconsign file format"""
@@ -786,14 +789,14 @@ class FileBuildInfoTestCase(_tempdirTestCase):
     def test_format(self):
         """Test the format() method"""
         f1 = self.fs.File('f1')
-        bi1 = SCons.Node.FS.BuildInfo(f1)
+        bi1 = SCons.Node.FS.FileBuildInfo(f1)
 
         s1sig = SCons.Node.FS.FileNodeInfo(self.fs.File('n1'))
-        s1sig.a = 1
+        s1sig.csig = 1
         d1sig = SCons.Node.FS.FileNodeInfo(self.fs.File('n2'))
-        d1sig.a = 2
+        d1sig.timestamp = 2
         i1sig = SCons.Node.FS.FileNodeInfo(self.fs.File('n3'))
-        i1sig.a = 3
+        i1sig.size = 3
 
         bi1.bsources = [self.fs.File('s1')]
         bi1.bdepends = [self.fs.File('d1')]
@@ -801,17 +804,19 @@ class FileBuildInfoTestCase(_tempdirTestCase):
         bi1.bsourcesigs = [s1sig]
         bi1.bdependsigs = [d1sig]
         bi1.bimplicitsigs = [i1sig]
+        bi1.bact = 'action'
+        bi1.bactsig = 'actionsig'
 
         expect_lines = [
-            'None 0',
-            's1: 1 None 0',
-            'd1: 2 None 0',
-            'i1: 3 None 0',
+            's1: 1 None None',
+            'd1: None 2 None',
+            'i1: None None 3',
+            'actionsig [action]',
         ]
 
         expect = string.join(expect_lines, '\n')
         format = bi1.format()
-        assert format == expect, (repr(format), repr(expect))
+        assert format == expect, (repr(expect), repr(format))
 
 class FSTestCase(_tempdirTestCase):
     def test_runTest(self):
@@ -890,7 +895,7 @@ class FSTestCase(_tempdirTestCase):
         except TypeError:
             pass
         else:
-            assert 0
+            raise Exception, "did not catch expected TypeError"
 
         assert x1.Entry(x4) == x4
         try:
@@ -898,7 +903,7 @@ class FSTestCase(_tempdirTestCase):
         except TypeError:
             pass
         else:
-            assert 0
+            raise Exception, "did not catch expected TypeError"
 
         x6 = x1.File(x6)
         assert isinstance(x6, SCons.Node.FS.File)
@@ -912,43 +917,47 @@ class FSTestCase(_tempdirTestCase):
 
         drive, path = os.path.splitdrive(os.getcwd())
 
+        def _do_Dir_test(lpath, path_, abspath_, up_path_, sep, fileSys=fs, drive=drive):
+            dir = fileSys.Dir(string.replace(lpath, '/', sep))
+
+            if os.sep != '/':
+                path_ = string.replace(path_, '/', os.sep)
+                abspath_ = string.replace(abspath_, '/', os.sep)
+                up_path_ = string.replace(up_path_, '/', os.sep)
+
+            def strip_slash(p, drive=drive):
+                if p[-1] == os.sep and len(p) > 1:
+                    p = p[:-1]
+                if p[0] == os.sep:
+                    p = drive + p
+                return p
+            path = strip_slash(path_)
+            abspath = strip_slash(abspath_)
+            up_path = strip_slash(up_path_)
+            name = string.split(abspath, os.sep)[-1]
+
+            assert dir.name == name, \
+                   "dir.name %s != expected name %s" % \
+                   (dir.name, name)
+            assert dir.path == path, \
+                   "dir.path %s != expected path %s" % \
+                   (dir.path, path)
+            assert str(dir) == path, \
+                   "str(dir) %s != expected path %s" % \
+                   (str(dir), path)
+            assert dir.get_abspath() == abspath, \
+                   "dir.abspath %s != expected absolute path %s" % \
+                   (dir.get_abspath(), abspath)
+            assert dir.up().path == up_path, \
+                   "dir.up().path %s != expected parent path %s" % \
+                   (dir.up().path, up_path)
+
         for sep in seps:
 
-            def Dir_test(lpath, path_, abspath_, up_path_, fileSys=fs, s=sep, drive=drive):
-                dir = fileSys.Dir(string.replace(lpath, '/', s))
+            def Dir_test(lpath, path_, abspath_, up_path_, sep=sep, func=_do_Dir_test):
+                return func(lpath, path_, abspath_, up_path_, sep)
 
-                if os.sep != '/':
-                    path_ = string.replace(path_, '/', os.sep)
-                    abspath_ = string.replace(abspath_, '/', os.sep)
-                    up_path_ = string.replace(up_path_, '/', os.sep)
-
-                def strip_slash(p, drive=drive):
-                    if p[-1] == os.sep and len(p) > 1:
-                        p = p[:-1]
-                    if p[0] == os.sep:
-                        p = drive + p
-                    return p
-                path = strip_slash(path_)
-                abspath = strip_slash(abspath_)
-                up_path = strip_slash(up_path_)
-                name = string.split(abspath, os.sep)[-1]
-
-                assert dir.name == name, \
-                       "dir.name %s != expected name %s" % \
-                       (dir.name, name)
-                assert dir.path == path, \
-                       "dir.path %s != expected path %s" % \
-                       (dir.path, path)
-                assert str(dir) == path, \
-                       "str(dir) %s != expected path %s" % \
-                       (str(dir), path)
-                assert dir.get_abspath() == abspath, \
-                       "dir.abspath %s != expected absolute path %s" % \
-                       (dir.get_abspath(), abspath)
-                assert dir.up().path == up_path, \
-                       "dir.up().path %s != expected parent path %s" % \
-                       (dir.up().path, up_path)
-
+            Dir_test('',            './',          sub_dir,           sub)
             Dir_test('foo',         'foo/',        sub_dir_foo,       './')
             Dir_test('foo/bar',     'foo/bar/',    sub_dir_foo_bar,   'foo/')
             Dir_test('/foo',        '/foo/',       '/foo/',           '/')
@@ -989,16 +998,26 @@ class FSTestCase(_tempdirTestCase):
             except:
                 raise
 
-            # Test that just specifying the drive works to identify
-            # its root directory.
-            p = os.path.abspath(test.workpath('root_file'))
+        # Test that just specifying the drive works to identify
+        # its root directory.
+        p = os.path.abspath(test.workpath('root_file'))
+        drive, path = os.path.splitdrive(p)
+        if drive:
+            # The assert below probably isn't correct for the general
+            # case, but it works for Windows, which covers a lot
+            # of ground...
+            dir = fs.Dir(drive)
+            assert str(dir) == drive + os.sep, str(dir)
+
+            # Make sure that lookups with and without the drive are
+            # equivalent.
+            p = os.path.abspath(test.workpath('some/file'))
             drive, path = os.path.splitdrive(p)
-            if drive:
-                # The assert below probably isn't correct for the general
-                # case, but it works for Windows, which covers a lot
-                # of ground...
-                dir = fs.Dir(drive)
-                assert str(dir) == drive + os.sep, str(dir)
+
+            e1 = fs.Entry(p)
+            e2 = fs.Entry(path)
+            assert e1 is e2, (e1, e2)
+            assert str(e1) is str(e2), (str(e1), str(e2))
 
         # Test for a bug in 0.04 that did not like looking up
         # dirs with a trailing slash on Windows.
@@ -1179,7 +1198,7 @@ class FSTestCase(_tempdirTestCase):
             except SCons.Errors.UserError:
                 pass
             else:
-                raise TestFailed, "did not catch expected UserError"
+                raise Exception, "did not catch expected UserError"
 
         nonexistent(fs.Entry, 'nonexistent')
         nonexistent(fs.Entry, 'nonexistent/foo')
@@ -1213,15 +1232,15 @@ class FSTestCase(_tempdirTestCase):
         f = fs.File('f_local')
         assert f._local == 0
 
-        #XXX test current() for directories
+        #XXX test_is_up_to_date() for directories
 
-        #XXX test sconsign() for directories
+        #XXX test_sconsign() for directories
 
-        #XXX test set_signature() for directories
+        #XXX test_set_signature() for directories
 
-        #XXX test build() for directories
+        #XXX test_build() for directories
 
-        #XXX test root()
+        #XXX test_root()
 
         # test Entry.get_contents()
         e = fs.Entry('does_not_exist')
@@ -1318,9 +1337,7 @@ class FSTestCase(_tempdirTestCase):
             exc_caught = 1
         assert exc_caught, "Should have caught a TypeError"
 
-        # XXX test calc_signature()
-
-        # XXX test current()
+        # XXX test_is_up_to_date()
 
         d = fs.Dir('dir')
         r = d.remove()
@@ -1368,6 +1385,109 @@ class FSTestCase(_tempdirTestCase):
                f.get_string(0)
         assert f.get_string(1) == 'baz', f.get_string(1)
 
+    def test_drive_letters(self):
+        """Test drive-letter look-ups"""
+
+        test = self.test
+
+        test.subdir('sub', ['sub', 'dir'])
+
+        def drive_workpath(drive, dirs, test=test):
+            x = apply(test.workpath, dirs)
+            drive, path = os.path.splitdrive(x)
+            return 'X:' + path
+
+        wp              = drive_workpath('X:', [''])
+
+        if wp[-1] in (os.sep, '/'):
+            tmp         = os.path.split(wp[:-1])[0]
+        else:
+            tmp         = os.path.split(wp)[0]
+
+        parent_tmp      = os.path.split(tmp)[0]
+        if parent_tmp == 'X:':
+            parent_tmp = 'X:' + os.sep
+
+        tmp_foo         = os.path.join(tmp, 'foo')
+
+        foo             = drive_workpath('X:', ['foo'])
+        foo_bar         = drive_workpath('X:', ['foo', 'bar'])
+        sub             = drive_workpath('X:', ['sub', ''])
+        sub_dir         = drive_workpath('X:', ['sub', 'dir', ''])
+        sub_dir_foo     = drive_workpath('X:', ['sub', 'dir', 'foo', ''])
+        sub_dir_foo_bar = drive_workpath('X:', ['sub', 'dir', 'foo', 'bar', ''])
+        sub_foo         = drive_workpath('X:', ['sub', 'foo', ''])
+
+        fs = SCons.Node.FS.FS()
+
+        seps = [os.sep]
+        if os.sep != '/':
+            seps = seps + ['/']
+
+        def _do_Dir_test(lpath, path_, up_path_, sep, fileSys=fs):
+            dir = fileSys.Dir(string.replace(lpath, '/', sep))
+
+            if os.sep != '/':
+                path_ = string.replace(path_, '/', os.sep)
+                up_path_ = string.replace(up_path_, '/', os.sep)
+
+            def strip_slash(p):
+                if p[-1] == os.sep and len(p) > 3:
+                    p = p[:-1]
+                return p
+            path = strip_slash(path_)
+            up_path = strip_slash(up_path_)
+            name = string.split(path, os.sep)[-1]
+
+            assert dir.name == name, \
+                   "dir.name %s != expected name %s" % \
+                   (dir.name, name)
+            assert dir.path == path, \
+                   "dir.path %s != expected path %s" % \
+                   (dir.path, path)
+            assert str(dir) == path, \
+                   "str(dir) %s != expected path %s" % \
+                   (str(dir), path)
+            assert dir.up().path == up_path, \
+                   "dir.up().path %s != expected parent path %s" % \
+                   (dir.up().path, up_path)
+
+        save_os_path = os.path
+        save_os_sep = os.sep
+        try:
+            import ntpath
+            os.path = ntpath
+            os.sep = '\\'
+            SCons.Node.FS.initialize_do_splitdrive()
+            SCons.Node.FS.initialize_normpath_check()
+
+            for sep in seps:
+
+                def Dir_test(lpath, path_, up_path_, sep=sep, func=_do_Dir_test):
+                    return func(lpath, path_, up_path_, sep)
+
+                Dir_test('#X:',         wp,             tmp)
+                Dir_test('X:foo',       foo,            wp)
+                Dir_test('X:foo/bar',   foo_bar,        foo)
+                Dir_test('X:/foo',      'X:/foo',       'X:/')
+                Dir_test('X:/foo/bar',  'X:/foo/bar/',  'X:/foo/')
+                Dir_test('X:..',        tmp,            parent_tmp)
+                Dir_test('X:foo/..',    wp,             tmp)
+                Dir_test('X:../foo',    tmp_foo,        tmp)
+                Dir_test('X:.',         wp,             tmp)
+                Dir_test('X:./.',       wp,             tmp)
+                Dir_test('X:foo/./bar', foo_bar,        foo)
+                Dir_test('#X:../foo',   tmp_foo,        tmp)
+                Dir_test('#X:/../foo',  tmp_foo,        tmp)
+                Dir_test('#X:foo/bar',  foo_bar,        foo)
+                Dir_test('#X:/foo/bar', foo_bar,        foo)
+                Dir_test('#X:/',        wp,             tmp)
+        finally:
+            os.path = save_os_path
+            os.sep = save_os_sep
+            SCons.Node.FS.initialize_do_splitdrive()
+            SCons.Node.FS.initialize_normpath_check()
+
     def test_target_from_source(self):
         """Test the method for generating target nodes from sources"""
         fs = self.fs
@@ -1407,8 +1527,7 @@ class FSTestCase(_tempdirTestCase):
 
         subdir = fs.Dir('subdir')
         fs.chdir(subdir, change_os_dir=1)
-        path, dir = fs._transformPath('#build/file', subdir)
-        self.fs._doLookup(SCons.Node.FS.File, path, dir)
+        self.fs._lookup('#build/file', subdir, SCons.Node.FS.File)
 
     def test_above_root(self):
         """Testing looking up a path above the root directory"""
@@ -1570,6 +1689,27 @@ class DirTestCase(_tempdirTestCase):
                         os.path.join('ddd', 'f2'),
                         os.path.join('ddd', 'f3')], kids
 
+    def test_implicit_re_scans(self):
+        """Test that adding entries causes a directory to be re-scanned
+        """
+
+        fs = self.fs
+
+        dir = fs.Dir('ddd')
+
+        fs.File(os.path.join('ddd', 'f1'))
+        dir.scan()
+        kids = map(lambda x: x.path, dir.children())
+        kids.sort()
+        assert kids == [os.path.join('ddd', 'f1')], kids
+
+        fs.File(os.path.join('ddd', 'f2'))
+        dir.scan()
+        kids = map(lambda x: x.path, dir.children())
+        kids.sort()
+        assert kids == [os.path.join('ddd', 'f1'),
+                        os.path.join('ddd', 'f2')], kids
+
     def test_entry_exists_on_disk(self):
         """Test the Dir.entry_exists_on_disk() method
         """
@@ -1637,10 +1777,10 @@ class DirTestCase(_tempdirTestCase):
         check(s, ['src/b1'])
 
         s = b1_b2_b1_b2.srcdir_list()
-        check(s, [])
+        check(s, ['src/b1/b2'])
 
         s = b1_b2_b1_b2_sub.srcdir_list()
-        check(s, [])
+        check(s, ['src/b1/b2/sub'])
 
     def test_srcdir_duplicate(self):
         """Test the Dir.srcdir_duplicate() method
@@ -1696,15 +1836,11 @@ class DirTestCase(_tempdirTestCase):
 
         derived_f = src0.File('derived-f')
         derived_f.is_derived = return_true
-        pseudo_f = src0.File('pseudo-f')
-        pseudo_f.is_pseudo_derived = return_true
         exists_f = src0.File('exists-f')
         exists_f.exists = return_true
 
         derived_e = src0.Entry('derived-e')
         derived_e.is_derived = return_true
-        pseudo_e = src0.Entry('pseudo-e')
-        pseudo_e.is_pseudo_derived = return_true
         exists_e = src0.Entry('exists-e')
         exists_e.exists = return_true
 
@@ -1719,8 +1855,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = src0.srcdir_find_file('derived-f')
         check(n, ['src0/derived-f', 'src0'])
-        n = src0.srcdir_find_file('pseudo-f')
-        check(n, ['src0/pseudo-f', 'src0'])
         n = src0.srcdir_find_file('exists-f')
         check(n, ['src0/exists-f', 'src0'])
         n = src0.srcdir_find_file('on-disk-f1')
@@ -1728,8 +1862,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = src0.srcdir_find_file('derived-e')
         check(n, ['src0/derived-e', 'src0'])
-        n = src0.srcdir_find_file('pseudo-e')
-        check(n, ['src0/pseudo-e', 'src0'])
         n = src0.srcdir_find_file('exists-e')
         check(n, ['src0/exists-e', 'src0'])
         n = src0.srcdir_find_file('on-disk-e1')
@@ -1741,8 +1873,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = bld0.srcdir_find_file('derived-f')
         check(n, ['src0/derived-f', 'bld0'])
-        n = bld0.srcdir_find_file('pseudo-f')
-        check(n, ['src0/pseudo-f', 'bld0'])
         n = bld0.srcdir_find_file('exists-f')
         check(n, ['src0/exists-f', 'bld0'])
         n = bld0.srcdir_find_file('on-disk-f2')
@@ -1750,8 +1880,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = bld0.srcdir_find_file('derived-e')
         check(n, ['src0/derived-e', 'bld0'])
-        n = bld0.srcdir_find_file('pseudo-e')
-        check(n, ['src0/pseudo-e', 'bld0'])
         n = bld0.srcdir_find_file('exists-e')
         check(n, ['src0/exists-e', 'bld0'])
         n = bld0.srcdir_find_file('on-disk-e2')
@@ -1769,15 +1897,11 @@ class DirTestCase(_tempdirTestCase):
 
         derived_f = src1.File('derived-f')
         derived_f.is_derived = return_true
-        pseudo_f = src1.File('pseudo-f')
-        pseudo_f.is_pseudo_derived = return_true
         exists_f = src1.File('exists-f')
         exists_f.exists = return_true
 
         derived_e = src1.Entry('derived-e')
         derived_e.is_derived = return_true
-        pseudo_e = src1.Entry('pseudo-e')
-        pseudo_e.is_pseudo_derived = return_true
         exists_e = src1.Entry('exists-e')
         exists_e.exists = return_true
 
@@ -1787,8 +1911,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = src1.srcdir_find_file('derived-f')
         check(n, ['src1/derived-f', 'src1'])
-        n = src1.srcdir_find_file('pseudo-f')
-        check(n, ['src1/pseudo-f', 'src1'])
         n = src1.srcdir_find_file('exists-f')
         check(n, ['src1/exists-f', 'src1'])
         n = src1.srcdir_find_file('on-disk-f1')
@@ -1796,8 +1918,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = src1.srcdir_find_file('derived-e')
         check(n, ['src1/derived-e', 'src1'])
-        n = src1.srcdir_find_file('pseudo-e')
-        check(n, ['src1/pseudo-e', 'src1'])
         n = src1.srcdir_find_file('exists-e')
         check(n, ['src1/exists-e', 'src1'])
         n = src1.srcdir_find_file('on-disk-e1')
@@ -1809,8 +1929,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = bld1.srcdir_find_file('derived-f')
         check(n, ['bld1/derived-f', 'src1'])
-        n = bld1.srcdir_find_file('pseudo-f')
-        check(n, ['bld1/pseudo-f', 'src1'])
         n = bld1.srcdir_find_file('exists-f')
         check(n, ['bld1/exists-f', 'src1'])
         n = bld1.srcdir_find_file('on-disk-f2')
@@ -1818,8 +1936,6 @@ class DirTestCase(_tempdirTestCase):
 
         n = bld1.srcdir_find_file('derived-e')
         check(n, ['bld1/derived-e', 'src1'])
-        n = bld1.srcdir_find_file('pseudo-e')
-        check(n, ['bld1/pseudo-e', 'src1'])
         n = bld1.srcdir_find_file('exists-e')
         check(n, ['bld1/exists-e', 'src1'])
         n = bld1.srcdir_find_file('on-disk-e2')
@@ -1917,19 +2033,6 @@ class EntryTestCase(_tempdirTestCase):
         test.subdir('e5d')
         test.write('e5f', "e5f\n")
 
-        e5f = fs.Entry('e5f')
-        sig = e5f.calc_signature(MyCalc(666))
-        assert e5f.__class__ is SCons.Node.FS.File, e5f.__class__
-        # This node has no builder, so it just calculates the
-        # signature once: the source content signature.
-        assert sig == 888, sig
-
-        e5n = fs.Entry('e5n')
-        sig = e5n.calc_signature(MyCalc(777))
-        assert e5n.__class__ is SCons.Node.FS.File, e5n.__class__
-        # Doesn't exist, no sources, and no builder: no sig
-        assert sig is None, sig
-
     def test_Entry_Entry_lookup(self):
         """Test looking up an Entry within another Entry"""
         self.fs.Entry('#topdir')
@@ -1980,6 +2083,291 @@ class FileTestCase(_tempdirTestCase):
         build_f1.linked = None
         assert not build_f1.exists(), "%s did not realize that %s disappeared" % (build_f1, src_f1)
         assert not os.path.exists(build_f1.abspath), "%s did not get removed after %s was removed" % (build_f1, src_f1)
+
+
+
+class GlobTestCase(_tempdirTestCase):
+    def setUp(self):
+        _tempdirTestCase.setUp(self)
+
+        fs = SCons.Node.FS.FS()
+        self.fs = fs
+
+        # Make entries on disk that will not have Nodes, so we can verify
+        # the behavior of looking for things on disk.
+        self.test.write('disk-aaa', "disk-aaa\n")
+        self.test.write('disk-bbb', "disk-bbb\n")
+        self.test.write('disk-ccc', "disk-ccc\n")
+        self.test.subdir('disk-sub')
+        self.test.write(['disk-sub', 'disk-ddd'], "disk-sub/disk-ddd\n")
+        self.test.write(['disk-sub', 'disk-eee'], "disk-sub/disk-eee\n")
+        self.test.write(['disk-sub', 'disk-fff'], "disk-sub/disk-fff\n")
+
+        # Make some entries that have both Nodes and on-disk entries,
+        # so we can verify what we do with
+        self.test.write('both-aaa', "both-aaa\n")
+        self.test.write('both-bbb', "both-bbb\n")
+        self.test.write('both-ccc', "both-ccc\n")
+        self.test.subdir('both-sub1')
+        self.test.write(['both-sub1', 'both-ddd'], "both-sub1/both-ddd\n")
+        self.test.write(['both-sub1', 'both-eee'], "both-sub1/both-eee\n")
+        self.test.write(['both-sub1', 'both-fff'], "both-sub1/both-fff\n")
+        self.test.subdir('both-sub2')
+        self.test.write(['both-sub2', 'both-ddd'], "both-sub2/both-ddd\n")
+        self.test.write(['both-sub2', 'both-eee'], "both-sub2/both-eee\n")
+        self.test.write(['both-sub2', 'both-fff'], "both-sub2/both-fff\n")
+
+        self.both_aaa = fs.File('both-aaa')
+        self.both_bbb = fs.File('both-bbb')
+        self.both_ccc = fs.File('both-ccc')
+        self.both_sub1 = fs.Dir('both-sub1')
+        self.both_sub1_both_ddd = self.both_sub1.File('both-ddd')
+        self.both_sub1_both_eee = self.both_sub1.File('both-eee')
+        self.both_sub1_both_fff = self.both_sub1.File('both-fff')
+        self.both_sub2 = fs.Dir('both-sub2')
+        self.both_sub2_both_ddd = self.both_sub2.File('both-ddd')
+        self.both_sub2_both_eee = self.both_sub2.File('both-eee')
+        self.both_sub2_both_fff = self.both_sub2.File('both-fff')
+
+        # Make various Nodes (that don't have on-disk entries) so we
+        # can verify how we match them.
+        self.ggg = fs.File('ggg')
+        self.hhh = fs.File('hhh')
+        self.iii = fs.File('iii')
+        self.subdir1 = fs.Dir('subdir1')
+        self.subdir1_jjj = self.subdir1.File('jjj')
+        self.subdir1_kkk = self.subdir1.File('kkk')
+        self.subdir1_lll = self.subdir1.File('lll')
+        self.subdir2 = fs.Dir('subdir2')
+        self.subdir2_jjj = self.subdir2.File('jjj')
+        self.subdir2_kkk = self.subdir2.File('kkk')
+        self.subdir2_lll = self.subdir2.File('lll')
+        self.sub = fs.Dir('sub')
+        self.sub_dir3 = self.sub.Dir('dir3')
+        self.sub_dir3_jjj = self.sub_dir3.File('jjj')
+        self.sub_dir3_kkk = self.sub_dir3.File('kkk')
+        self.sub_dir3_lll = self.sub_dir3.File('lll')
+
+
+    def do_cases(self, cases, **kwargs):
+
+        # First, execute all of the cases with string=True and verify
+        # that we get the expected strings returned.  We do this first
+        # so the Glob() calls don't add Nodes to the self.fs file system
+        # hierarchy.
+
+        import copy
+        strings_kwargs = copy.copy(kwargs)
+        strings_kwargs['strings'] = True
+        for input, string_expect, node_expect in cases:
+            r = apply(self.fs.Glob, (input,), strings_kwargs)
+            r.sort()
+            assert r == string_expect, "Glob(%s, strings=True) expected %s, got %s" % (input, string_expect, r)
+
+        # Now execute all of the cases without string=True and look for
+        # the expected Nodes to be returned.  If we don't have a list of
+        # actual expected Nodes, that means we're expecting a search for
+        # on-disk-only files to have returned some newly-created nodes.
+        # Verify those by running the list through str() before comparing
+        # them with the expected list of strings.
+        for input, string_expect, node_expect in cases:
+            r = apply(self.fs.Glob, (input,), kwargs)
+            if node_expect:
+                r.sort(lambda a,b: cmp(a.path, b.path))
+                result = node_expect
+            else:
+                r = map(str, r)
+                r.sort()
+                result = string_expect
+            assert r == result, "Glob(%s) expected %s, got %s" % (input, map(str, result), map(str, r))
+
+    def test_exact_match(self):
+        """Test globbing for exact Node matches"""
+        join = os.path.join
+
+        cases = (
+            ('ggg',         ['ggg'],                    [self.ggg]),
+
+            ('subdir1',     ['subdir1'],                [self.subdir1]),
+
+            ('subdir1/jjj', [join('subdir1', 'jjj')],   [self.subdir1_jjj]),
+
+            ('disk-aaa',    ['disk-aaa'],               None),
+
+            ('disk-sub',    ['disk-sub'],               None),
+
+            ('both-aaa',    ['both-aaa'],               []),
+        )
+
+        self.do_cases(cases)
+
+    def test_subdir_matches(self):
+        """Test globbing for exact Node matches in subdirectories"""
+        join = os.path.join
+
+        cases = (
+            ('*/jjj',
+             [join('subdir1', 'jjj'), join('subdir2', 'jjj')],
+             [self.subdir1_jjj, self.subdir2_jjj]),
+
+            ('*/disk-ddd',
+             [join('disk-sub', 'disk-ddd')],
+             None),
+        )
+
+        self.do_cases(cases)
+
+    def test_asterisk(self):
+        """Test globbing for simple asterisk Node matches"""
+        cases = (
+            ('h*',
+             ['hhh'],
+             [self.hhh]),
+
+            ('*',
+             ['both-aaa', 'both-bbb', 'both-ccc',
+              'both-sub1', 'both-sub2',
+              'ggg', 'hhh', 'iii',
+              'sub', 'subdir1', 'subdir2'],
+             [self.both_aaa, self.both_bbb, self.both_ccc,
+              self.both_sub1, self.both_sub2,
+              self.ggg, self.hhh, self.iii,
+              self.sub, self.subdir1, self.subdir2]),
+        )
+
+        self.do_cases(cases, ondisk=False)
+
+        cases = (
+            ('disk-b*',
+             ['disk-bbb'],
+             None),
+
+            ('*',
+             ['both-aaa', 'both-bbb', 'both-ccc', 'both-sub1', 'both-sub2',
+              'disk-aaa', 'disk-bbb', 'disk-ccc', 'disk-sub',
+              'ggg', 'hhh', 'iii',
+              'sub', 'subdir1', 'subdir2'],
+             None),
+        )
+
+        self.do_cases(cases)
+
+    def test_question_mark(self):
+        """Test globbing for simple question-mark Node matches"""
+        join = os.path.join
+
+        cases = (
+            ('ii?',
+             ['iii'],
+             [self.iii]),
+
+            ('both-sub?/both-eee',
+             [join('both-sub1', 'both-eee'), join('both-sub2', 'both-eee')],
+             [self.both_sub1_both_eee, self.both_sub2_both_eee]),
+
+            ('subdir?/jjj',
+             [join('subdir1', 'jjj'), join('subdir2', 'jjj')],
+             [self.subdir1_jjj, self.subdir2_jjj]),
+
+            ('disk-cc?',
+             ['disk-ccc'],
+             None),
+        )
+
+        self.do_cases(cases)
+
+    def test_does_not_exist(self):
+        """Test globbing for things that don't exist"""
+
+        cases = (
+            ('does_not_exist',  [], []),
+            ('no_subdir/*',     [], []),
+            ('subdir?/no_file', [], []),
+        )
+
+        self.do_cases(cases)
+
+    def test_subdir_asterisk(self):
+        """Test globbing for asterisk Node matches in subdirectories"""
+        join = os.path.join
+
+        cases = (
+            ('*/k*',
+             [join('subdir1', 'kkk'), join('subdir2', 'kkk')],
+             [self.subdir1_kkk, self.subdir2_kkk]),
+
+            ('both-sub?/*',
+             [join('both-sub1', 'both-ddd'),
+              join('both-sub1', 'both-eee'),
+              join('both-sub1', 'both-fff'),
+              join('both-sub2', 'both-ddd'),
+              join('both-sub2', 'both-eee'),
+              join('both-sub2', 'both-fff')],
+             [self.both_sub1_both_ddd, self.both_sub1_both_eee, self.both_sub1_both_fff,
+              self.both_sub2_both_ddd, self.both_sub2_both_eee, self.both_sub2_both_fff],
+             ),
+
+            ('subdir?/*',
+             [join('subdir1', 'jjj'),
+              join('subdir1', 'kkk'),
+              join('subdir1', 'lll'),
+              join('subdir2', 'jjj'),
+              join('subdir2', 'kkk'),
+              join('subdir2', 'lll')],
+             [self.subdir1_jjj, self.subdir1_kkk, self.subdir1_lll,
+              self.subdir2_jjj, self.subdir2_kkk, self.subdir2_lll]),
+
+            ('sub/*/*',
+             [join('sub', 'dir3', 'jjj'),
+              join('sub', 'dir3', 'kkk'),
+              join('sub', 'dir3', 'lll')],
+             [self.sub_dir3_jjj, self.sub_dir3_kkk, self.sub_dir3_lll]),
+
+            ('*/k*',
+             [join('subdir1', 'kkk'), join('subdir2', 'kkk')],
+             None),
+
+            ('subdir?/*',
+             [join('subdir1', 'jjj'),
+              join('subdir1', 'kkk'),
+              join('subdir1', 'lll'),
+              join('subdir2', 'jjj'),
+              join('subdir2', 'kkk'),
+              join('subdir2', 'lll')],
+             None),
+
+            ('sub/*/*',
+             [join('sub', 'dir3', 'jjj'),
+              join('sub', 'dir3', 'kkk'),
+              join('sub', 'dir3', 'lll')],
+             None),
+        )
+
+        self.do_cases(cases)
+
+    def test_subdir_question(self):
+        """Test globbing for question-mark Node matches in subdirectories"""
+        join = os.path.join
+
+        cases = (
+            ('*/?kk',
+             [join('subdir1', 'kkk'), join('subdir2', 'kkk')],
+             [self.subdir1_kkk, self.subdir2_kkk]),
+
+            ('subdir?/l?l',
+             [join('subdir1', 'lll'), join('subdir2', 'lll')],
+             [self.subdir1_lll, self.subdir2_lll]),
+
+            ('*/disk-?ff',
+             [join('disk-sub', 'disk-fff')],
+             None),
+
+            ('subdir?/l?l',
+             [join('subdir1', 'lll'), join('subdir2', 'lll')],
+             None),
+        )
+
+        self.do_cases(cases)
 
 
 
@@ -2299,9 +2687,7 @@ class RepositoryTestCase(_tempdirTestCase):
         finally:
             test.unlink(["rep3", "contents"])
 
-    #def test calc_signature(self):
-
-    #def test current(self):
+    #def test_is_up_to_date(self):
 
 
 
@@ -2386,7 +2772,7 @@ class StringDirTestCase(unittest.TestCase):
         fs = SCons.Node.FS.FS(test.workpath(''))
 
         d = fs.Dir('sub', '.')
-        assert str(d) == 'sub'
+        assert str(d) == 'sub', str(d)
         assert d.exists()
         f = fs.File('file', 'sub')
         assert str(f) == os.path.join('sub', 'file')
@@ -2402,8 +2788,7 @@ class stored_infoTestCase(unittest.TestCase):
         d = fs.Dir('sub')
         f = fs.File('file1', d)
         bi = f.get_stored_info()
-        assert bi.ninfo.timestamp == 0, bi.ninfo.timestamp
-        assert bi.ninfo.size == None, bi.ninfo.size
+        assert hasattr(bi, 'ninfo')
 
         class MySConsign:
             class Null:
@@ -2509,7 +2894,7 @@ class prepareTestCase(unittest.TestCase):
         class MkdirAction(Action):
             def __init__(self, dir_made):
                 self.dir_made = dir_made
-            def __call__(self, target, source, env, errfunc):
+            def __call__(self, target, source, env):
                 self.dir_made.extend(target)
 
         dir_made = []
@@ -2529,6 +2914,8 @@ class prepareTestCase(unittest.TestCase):
         dir = fs.Dir("dir")
         dir.prepare()
 
+
+
 class SConstruct_dirTestCase(unittest.TestCase):
     def runTest(self):
         """Test setting the SConstruct directory"""
@@ -2536,6 +2923,19 @@ class SConstruct_dirTestCase(unittest.TestCase):
         fs = SCons.Node.FS.FS()
         fs.set_SConstruct_dir(fs.Dir('xxx'))
         assert fs.SConstruct_dir.path == 'xxx'
+
+
+
+class CacheDirTestCase(unittest.TestCase):
+
+    def test_get_cachedir_csig(self):
+        fs = SCons.Node.FS.FS()
+
+        f9 = fs.File('f9')
+        r = f9.get_cachedir_csig()
+        assert r == 'd41d8cd98f00b204e9800998ecf8427e', r
+
+
 
 class clearTestCase(unittest.TestCase):
     def runTest(self):
@@ -2583,6 +2983,8 @@ class clearTestCase(unittest.TestCase):
         assert not f.exists()
         assert not f.rexists()
         assert str(f) == test.workpath('f'), str(f)
+
+
 
 class disambiguateTestCase(unittest.TestCase):
     def runTest(self):
@@ -2658,6 +3060,8 @@ class postprocessTestCase(unittest.TestCase):
 
         f = fs.File('f')
         f.postprocess()
+
+
 
 class SpecialAttrTestCase(unittest.TestCase):
     def runTest(self):
@@ -2744,7 +3148,7 @@ class SpecialAttrTestCase(unittest.TestCase):
         assert s == os.path.normpath('baz/bar/baz.blat'), s
         assert f.srcpath.is_literal(), f.srcpath
         g = f.srcpath.get()
-        assert isinstance(g, SCons.Node.FS.Entry), g.__class__
+        assert isinstance(g, SCons.Node.FS.File), g.__class__
 
         s = str(f.srcdir)
         assert s == os.path.normpath('baz/bar'), s
@@ -2814,6 +3218,8 @@ class SpecialAttrTestCase(unittest.TestCase):
             caught = 1
         assert caught, "did not catch expected AttributeError"
 
+
+
 class SaveStringsTestCase(unittest.TestCase):
     def runTest(self):
         """Test caching string values of nodes."""
@@ -2873,6 +3279,8 @@ class SaveStringsTestCase(unittest.TestCase):
         expect = map(os.path.normpath, ['src/f', 'd1/f', 'd0/b', 'd1/b'])
         assert s == expect, 'node str() not cached: %s'%s
 
+
+
 if __name__ == "__main__":
     suite = unittest.TestSuite()
     suite.addTest(BuildDirTestCase())
@@ -2889,6 +3297,7 @@ if __name__ == "__main__":
     suite.addTest(SaveStringsTestCase())
     tclasses = [
         BaseTestCase,
+        CacheDirTestCase,
         DirTestCase,
         DirBuildInfoTestCase,
         DirNodeInfoTestCase,
@@ -2897,6 +3306,7 @@ if __name__ == "__main__":
         FileBuildInfoTestCase,
         FileNodeInfoTestCase,
         FSTestCase,
+        GlobTestCase,
         RepositoryTestCase,
     ]
     for tclass in tclasses:

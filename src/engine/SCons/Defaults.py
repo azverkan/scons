@@ -49,7 +49,6 @@ import SCons.Builder
 import SCons.CacheDir
 import SCons.Environment
 import SCons.PathList
-import SCons.Sig
 import SCons.Subst
 import SCons.Tool
 
@@ -61,12 +60,39 @@ _default_env = None
 
 # Lazily instantiate the default environment so the overhead of creating
 # it doesn't apply when it's not needed.
+def _fetch_DefaultEnvironment(*args, **kw):
+    """
+    Returns the already-created default construction environment.
+    """
+    global _default_env
+    return _default_env
+
 def DefaultEnvironment(*args, **kw):
+    """
+    Initial public entry point for creating the default construction
+    Environment.
+
+    After creating the environment, we overwrite our name
+    (DefaultEnvironment) with the _fetch_DefaultEnvironment() function,
+    which more efficiently returns the initialized default construction
+    environment without checking for its existence.
+
+    (This function still exists with its _default_check because someone
+    else (*cough* Script/__init__.py *cough*) may keep a reference
+    to this function.  So we can't use the fully functional idiom of
+    having the name originally be a something that *only* creates the
+    construction environment and then overwrites the name.)
+    """
     global _default_env
     if not _default_env:
+        import SCons.Util
         _default_env = apply(SCons.Environment.Environment, args, kw)
-        _default_env._build_signature = 1
-        _default_env._calc_module = SCons.Sig.default_module
+        if SCons.Util.md5:
+            _default_env.Decider('MD5')
+        else:
+            _default_env.Decider('timestamp-match')
+        global DefaultEnvironment
+        DefaultEnvironment = _fetch_DefaultEnvironment
         _default_env._CacheDir = SCons.CacheDir.Null()
     return _default_env
 
@@ -106,9 +132,9 @@ LaTeXScan = SCons.Tool.LaTeXScanner
 ObjSourceScan = SCons.Tool.SourceFileScanner
 ProgScan = SCons.Tool.ProgramScanner
 
-# This isn't really a tool scanner, so it doesn't quite belong with
-# the rest of those in Tool/__init__.py, but I'm not sure where else it
-# should go.  Leave it here for now.
+# These aren't really tool scanners, so they don't quite belong with
+# the rest of those in Tool/__init__.py, but I'm not sure where else
+# they should go.  Leave them here for now.
 import SCons.Scanner.Dir
 DirScanner = SCons.Scanner.Dir.DirScanner()
 DirEntryScanner = SCons.Scanner.Dir.DirEntryScanner()
@@ -131,7 +157,10 @@ LdModuleLinkAction = SCons.Action.Action("$LDMODULECOM", "$LDMODULECOMSTR")
 # ways by creating ActionFactory instances.
 ActionFactory = SCons.Action.ActionFactory
 
-Chmod = ActionFactory(os.chmod,
+def chmod_func(path, mode):
+    return os.chmod(str(path), mode)
+
+Chmod = ActionFactory(chmod_func,
                       lambda dest, mode: 'Chmod("%s", 0%o)' % (dest, mode))
 
 def copy_func(dest, src):
@@ -145,9 +174,11 @@ def copy_func(dest, src):
         return shutil.copytree(src, dest, 1)
 
 Copy = ActionFactory(copy_func,
-                     lambda dest, src: 'Copy("%s", "%s")' % (dest, src))
+                     lambda dest, src: 'Copy("%s", "%s")' % (dest, src),
+                     convert=str)
 
 def delete_func(entry, must_exist=0):
+    entry = str(entry)
     if not must_exist and not os.path.exists(entry):
         return None
     if not os.path.exists(entry) or os.path.isfile(entry):
@@ -161,12 +192,15 @@ def delete_strfunc(entry, must_exist=0):
 Delete = ActionFactory(delete_func, delete_strfunc)
 
 Mkdir = ActionFactory(os.makedirs,
-                      lambda dir: 'Mkdir("%s")' % dir)
+                      lambda dir: 'Mkdir("%s")' % dir,
+                      convert=str)
 
 Move = ActionFactory(lambda dest, src: os.rename(src, dest),
-                     lambda dest, src: 'Move("%s", "%s")' % (dest, src))
+                     lambda dest, src: 'Move("%s", "%s")' % (dest, src),
+                     convert=str)
 
 def touch_func(file):
+    file = str(file)
     mtime = int(time.time())
     if os.path.exists(file):
         atime = os.path.getatime(file)

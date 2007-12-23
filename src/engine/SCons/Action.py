@@ -31,8 +31,8 @@ other modules:
 
     get_contents()
         Fetches the "contents" of an Action for signature calculation.
-        This is what the Sig/*.py subsystem uses to decide if a target
-        needs to be rebuilt because its action changed.
+        This is what gets MD5 checksumm'ed to decide if a target needs
+        to be rebuilt because its action changed.
 
     genstring()
         Returns a string representation of the Action *without*
@@ -330,7 +330,14 @@ class _ActionAction(ActionBase):
                 os.chdir(chdir)
             try:
                 stat = self.execute(target, source, env)
-                stat = exitstatfunc(stat)
+                if isinstance(stat, SCons.Errors.BuildError):
+                    s = exitstatfunc(stat.status)
+                    if s:
+                        stat.status = s
+                    else:
+                        stat = s
+                else:
+                    stat = exitstatfunc(stat)
             finally:
                 if save_cwd:
                     os.chdir(save_cwd)
@@ -478,7 +485,11 @@ class CommandAction(_ActionAction):
             cmd_line = escape_list(cmd_line, escape)
             result = spawn(shell, escape, cmd_line[0], cmd_line, ENV)
             if not ignore and result:
-                return result
+                msg = "Error %s" % result
+                return SCons.Errors.BuildError(errstr=msg,
+                                               status=result,
+                                               action=self,
+                                               command=cmd_line)
         return 0
 
     def get_contents(self, target, source, env):
@@ -494,6 +505,22 @@ class CommandAction(_ActionAction):
         else:
             cmd = str(cmd)
         return env.subst_target_source(cmd, SUBST_SIG, target, source)
+
+    def get_implicit_deps(self, target, source, env):
+        icd = env.get('IMPLICIT_COMMAND_DEPENDENCIES', True)
+        if SCons.Util.is_String(icd) and icd[:1] == '$':
+            icd = env.subst(icd)
+        if not icd or icd in ('0', 'None'):
+            return []
+        from SCons.Subst import SUBST_SIG
+        cmd_list = env.subst_list(self.cmd_list, SUBST_SIG, target, source)
+        res = []
+        for cmd_line in cmd_list:
+            if cmd_line:
+                d = env.WhereIs(str(cmd_line[0]))
+                if d:
+                    res.append(env.fs.File(d))
+        return res
 
 class CommandGeneratorAction(ActionBase):
     """Class for command-generator actions."""
@@ -541,6 +568,9 @@ class CommandGeneratorAction(ActionBase):
         since those parts don't affect signatures.
         """
         return self._generate(target, source, env, 1).get_contents(target, source, env)
+
+    def get_implicit_deps(self, target, source, env):
+        return self._generate(target, source, env, 1).get_implicit_deps(target, source, env)
 
 
 
@@ -670,9 +700,19 @@ class FunctionAction(_ActionAction):
             # target file will appear).
             try: filename = e.filename
             except AttributeError: filename = None
-            raise SCons.Errors.BuildError(node=target,
-                                          errstr=e.strerror,
-                                          filename=filename)
+            result = SCons.Errors.BuildError(node=target,
+                                             errstr=e.strerror,
+                                             status=1,
+                                             filename=filename,
+                                             action=self,
+                                             command=self.strfunction(target, source, env))
+        else:
+            if result:
+                msg = "Error %s" % result
+                result = SCons.Errors.BuildError(errstr=msg,
+                                                 status=result,
+                                                 action=self,
+                                                 command=self.strfunction(target, source, env))
         return result
 
     def get_contents(self, target, source, env):
@@ -717,6 +757,9 @@ class FunctionAction(_ActionAction):
         return contents + env.subst(string.join(map(lambda v: '${'+v+'}',
                                                      self.varlist)))
 
+    def get_implicit_deps(self, target, source, env):
+        return []
+
 class ListAction(ActionBase):
     """Class for lists of other actions."""
     def __init__(self, list):
@@ -760,6 +803,12 @@ class ListAction(ActionBase):
                 return stat
         return 0
 
+    def get_implicit_deps(self, target, source, env):
+        result = []
+        for act in self.list:
+            result.extend(act.get_implicit_deps(target, source, env))
+        return result
+
 class ActionCaller:
     """A class for delaying calling an Action function with specific
     (positional and keyword) arguments until the Action is actually
@@ -794,8 +843,9 @@ class ActionCaller:
         # was called by using this hard-coded value as a special return.
         if s == '$__env__':
             return env
-        else:
+        elif SCons.Util.is_String(s):
             return env.subst(s, 0, target, source)
+        return self.parent.convert(s)
     def subst_args(self, target, source, env):
         return map(lambda x, self=self, t=target, s=source, e=env:
                           self.subst(x, t, s, e),
@@ -825,9 +875,10 @@ class ActionFactory:
     called with and give them to the ActionCaller object we create,
     so it can hang onto them until it needs them.
     """
-    def __init__(self, actfunc, strfunc):
+    def __init__(self, actfunc, strfunc, convert=lambda x: x):
         self.actfunc = actfunc
         self.strfunc = strfunc
+        self.convert = convert
     def __call__(self, *args, **kw):
         ac = ActionCaller(self, args, kw)
         action = Action(ac, strfunction=ac.strfunction)

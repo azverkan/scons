@@ -25,8 +25,15 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify that we print a useful message (and exit non-zero) if an external
-error occurs while deciding if a Node is current or not.
+A currently disabled test that used to verify that we print a useful
+message (and exit non-zero) if an external error occurs while deciding
+if a Node is current or not.
+
+This behavior changed when the Big Signature Refactoring changed when
+signature calculation happens to *after* a Node has been visited (and
+therefore visiting source Nodes in turn).  Creating an analogous situation
+in the new code isn't obvious, and It's not clear whether we need it
+anyway, so we're going to leave this checked in but disabled for now.
 """
 
 import sys
@@ -35,19 +42,20 @@ import TestSCons
 
 test = TestSCons.TestSCons()
 
-install = test.workpath('install')
-install_file = test.workpath('install', 'file')
-work_file = test.workpath('work', 'file')
+test.skip_test('Test not useful with current code; skipping.\n')
+
+work_file_out = test.workpath('work', 'file.out')
 
 test.subdir('install', 'work')
 
 test.write(['work', 'SConstruct'], """\
-Alias("install", Install(r"%(install)s", File('file')))
+file_out = Command('file.out', 'file.in', Copy('$TARGET', '$SOURCE'))
+Alias("install", file_out)
 
 # Make a directory where we expect the File() to be.  This causes an
 # IOError or OSError when we try to open it to read its signature.
 import os
-os.mkdir(r'%(work_file)s')
+os.mkdir('file.in')
 """ % locals())
 
 if sys.platform == 'win32':
@@ -56,7 +64,7 @@ else:
     error_message = "Is a directory"
 
 expect = """\
-scons: *** [%(install_file)s] %(work_file)s: %(error_message)s
+scons: *** [install] %(work_file_out)s: %(error_message)s
 """ % locals()
 
 test.run(chdir = 'work',

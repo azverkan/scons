@@ -37,6 +37,10 @@ import time
 
 test = TestSCons.TestSCons()
 
+CC = test.detect('CC')
+LINK = test.detect('LINK')
+if LINK is None: LINK = CC
+
 test.write('SConstruct', """
 env = Environment(OBJSUFFIX = '.ooo', PROGSUFFIX = '.xxx')
 env.Program('foo', Split('foo.c bar.c'))
@@ -56,6 +60,7 @@ int main(int argc, char *argv[])
 
 test.write('bar.c', """
 #include "bar.h"
+int local = 1;
 """)
 
 test.write('foo.h', """
@@ -75,14 +80,17 @@ test.write('bar.h', """
 stree = """
 [E B   C  ]+-foo.xxx
 [E B   C  ]  +-foo.ooo
-[E        ]  | +-foo.c
-[E        ]  | +-foo.h
-[E        ]  | +-bar.h
+[E     C  ]  | +-foo.c
+[E     C  ]  | +-foo.h
+[E     C  ]  | +-bar.h
+[E     C  ]  | +-%(CC)s
 [E B   C  ]  +-bar.ooo
-[E        ]    +-bar.c
-[E        ]    +-bar.h
-[E        ]    +-foo.h
-"""
+[E     C  ]  | +-bar.c
+[E     C  ]  | +-bar.h
+[E     C  ]  | +-foo.h
+[E     C  ]  | +-%(CC)s
+[E     C  ]  +-%(LINK)s
+""" % locals()
 
 test.run(arguments = "--debug=stree foo.xxx")
 test.fail_test(string.find(test.stdout(), stree) == -1)
@@ -101,14 +109,17 @@ stree2 = """
 
 [  B      ]+-foo.xxx
 [  B      ]  +-foo.ooo
-[E        ]  | +-foo.c
-[E        ]  | +-foo.h
-[E        ]  | +-bar.h
+[E     C  ]  | +-foo.c
+[E     C  ]  | +-foo.h
+[E     C  ]  | +-bar.h
+[E     C  ]  | +-%(CC)s
 [  B      ]  +-bar.ooo
-[E        ]    +-bar.c
-[E        ]    +-bar.h
-[E        ]    +-foo.h
-"""
+[E     C  ]  | +-bar.c
+[E     C  ]  | +-bar.h
+[E     C  ]  | +-foo.h
+[E     C  ]  | +-%(CC)s
+[E     C  ]  +-%(LINK)s
+""" % locals()
 
 test.run(arguments = '-c foo.xxx')
 

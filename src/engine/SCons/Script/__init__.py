@@ -110,6 +110,8 @@ QuestionTask            = Main.QuestionTask
 AddOption               = Main.AddOption
 GetOption               = Main.GetOption
 SetOption               = Main.SetOption
+Progress                = Main.Progress
+GetBuildFailures        = Main.GetBuildFailures
 
 #keep_going_on_error     = Main.keep_going_on_error
 #print_dtree             = Main.print_dtree
@@ -260,7 +262,7 @@ def HelpFunction(text):
 sconscript_reading = 0
 
 #
-def Options(files=None, args=ARGUMENTS):
+def Options(files=[], args=ARGUMENTS):
     return SCons.Options.Options(files, args)
 
 # The list of global functions to add to the SConscript name space
@@ -288,6 +290,7 @@ GlobalDefaultEnvironmentFunctions = [
     'CacheDir',
     'Clean',
     #The Command() method is handled separately, below.
+    'Decider',
     'Depends',
     'Dir',
     'NoClean',
@@ -301,6 +304,7 @@ GlobalDefaultEnvironmentFunctions = [
     'Flatten',
     'GetBuildPath',
     'Header',
+    'Glob',
     'Ignore',
     'Install',
     'InstallAs',
@@ -310,6 +314,7 @@ GlobalDefaultEnvironmentFunctions = [
     'Precious',
     'Project',
     'Repository',
+    'Requires',
     'SConsignFile',
     'SideEffect',
     'SourceCode',

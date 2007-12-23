@@ -33,6 +33,7 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import string
 
 from SCons.Debug import logInstanceCreation
+import SCons.Errors
 import SCons.Memoize
 
 
@@ -59,6 +60,7 @@ class Executor:
         self.overridelist = overridelist
         self.targets = targets
         self.sources = sources[:]
+        self.sources_need_sorting = False
         self.builder_kw = builder_kw
         self._memo = {}
 
@@ -74,10 +76,17 @@ class Executor:
     def get_action_list(self):
         return self.pre_actions + self.action_list + self.post_actions
 
+    memoizer_counters.append(SCons.Memoize.CountValue('get_build_env'))
+
     def get_build_env(self):
         """Fetch or create the appropriate build Environment
         for this Executor.
         """
+        try:
+            return self._memo['get_build_env']
+        except KeyError:
+            pass
+
         # Create the build environment instance with appropriate
         # overrides.  These get evaluated against the current
         # environment's construction variables so that users can
@@ -91,42 +100,49 @@ class Executor:
         env = self.env or SCons.Defaults.DefaultEnvironment()
         build_env = env.Override(overrides)
 
+        self._memo['get_build_env'] = build_env
+
         return build_env
 
     def get_build_scanner_path(self, scanner):
-        """Fetch the scanner path for this executor's targets
-        and sources.
+        """Fetch the scanner path for this executor's targets and sources.
         """
         env = self.get_build_env()
         try:
             cwd = self.targets[0].cwd
         except (IndexError, AttributeError):
             cwd = None
-        return scanner.path(env, cwd, self.targets, self.sources)
+        return scanner.path(env, cwd, self.targets, self.get_sources())
 
     def get_kw(self, kw={}):
         result = self.builder_kw.copy()
         result.update(kw)
         return result
 
-    def do_nothing(self, target, exitstatfunc, kw):
-        pass
+    def do_nothing(self, target, kw):
+        return 0
 
-    def do_execute(self, target, exitstatfunc, kw):
+    def do_execute(self, target, kw):
         """Actually execute the action list."""
         env = self.get_build_env()
         kw = self.get_kw(kw)
+        status = 0
         for act in self.get_action_list():
-            apply(act,
-                  (self.targets, self.sources, env, exitstatfunc),
-                  kw)
+            status = apply(act, (self.targets, self.get_sources(), env), kw)
+            if isinstance(status, SCons.Errors.BuildError):
+                status.executor = self
+                raise status
+            elif status:
+                msg = "Error %s" % status
+                raise SCons.Errors.BuildError(errstr=msg, executor=self, action=act)
+        return status
 
     # use extra indirection because with new-style objects (Python 2.2
     # and above) we can't override special methods, and nullify() needs
     # to be able to do this.
 
-    def __call__(self, target, exitstatfunc, **kw):
-        self.do_execute(target, exitstatfunc, kw)
+    def __call__(self, target, **kw):
+        return self.do_execute(target, kw)
 
     def cleanup(self):
         self._memo = {}
@@ -135,8 +151,14 @@ class Executor:
         """Add source files to this Executor's list.  This is necessary
         for "multi" Builders that can be called repeatedly to build up
         a source file list for a given target."""
-        slist = filter(lambda x, s=self.sources: x not in s, sources)
-        self.sources.extend(slist)
+        self.sources.extend(sources)
+        self.sources_need_sorting = True
+
+    def get_sources(self):
+        if self.sources_need_sorting:
+            self.sources = SCons.Util.uniquer_hashables(self.sources)
+            self.sources_need_sorting = False
+        return self.sources
 
     def add_pre_action(self, action):
         self.pre_actions.append(action)
@@ -148,7 +170,7 @@ class Executor:
 
     def my_str(self):
         env = self.get_build_env()
-        get = lambda action, t=self.targets, s=self.sources, e=env: \
+        get = lambda action, t=self.targets, s=self.get_sources(), e=env: \
                      action.genstring(t, s, e)
         return string.join(map(get, self.get_action_list()), "\n")
 
@@ -173,7 +195,7 @@ class Executor:
         except KeyError:
             pass
         env = self.get_build_env()
-        get = lambda action, t=self.targets, s=self.sources, e=env: \
+        get = lambda action, t=self.targets, s=self.get_sources(), e=env: \
                      action.get_contents(t, s, e)
         result = string.join(map(get, self.get_action_list()), "")
         self._memo['get_contents'] = result
@@ -191,7 +213,7 @@ class Executor:
 
     def scan_sources(self, scanner):
         if self.sources:
-            self.scan(scanner, self.sources)
+            self.scan(scanner, self.get_sources())
 
     def scan(self, scanner, node_list):
         """Scan a list of this Executor's files (targets or sources) for
@@ -218,9 +240,12 @@ class Executor:
         scanner_list = map(select_specific_scanner, scanner_list)
         scanner_list = filter(remove_null_scanners, scanner_list)
         scanner_path_list = map(add_scanner_path, scanner_list)
+
         deps = []
         for node, scanner, path in scanner_path_list:
             deps.extend(node.get_implicit_deps(env, scanner, path))
+
+        deps.extend(self.get_implicit_deps())
 
         for tgt in self.targets:
             tgt.add_to_implicit(deps)
@@ -228,7 +253,7 @@ class Executor:
     def get_missing_sources(self):
         """
         """
-        return filter(lambda s: s.missing(), self.sources)
+        return filter(lambda s: s.missing(), self.get_sources())
 
     def _get_unignored_sources_key(self, ignore=()):
         return tuple(ignore)
@@ -248,9 +273,12 @@ class Executor:
             except KeyError:
                 pass
 
-        sourcelist = self.sources
+        sourcelist = self.get_sources()
         if ignore:
-            sourcelist = filter(lambda s, i=ignore: not s in i, sourcelist)
+            idict = {}
+            for i in ignore:
+                idict[i] = 1
+            sourcelist = filter(lambda s, i=idict: not i.has_key(s), sourcelist)
 
         memo_dict[ignore] = sourcelist
 
@@ -280,6 +308,15 @@ class Executor:
 
         return result
 
+    def get_implicit_deps(self):
+        """Return the executor's implicit dependencies, i.e. the nodes of
+        the commands to be executed."""
+        result = []
+        build_env = self.get_build_env()
+        for act in self.get_action_list():
+            result.extend(act.get_implicit_deps(self.targets, self.get_sources(), build_env))
+        return result
+
 
 _Executor = Executor
 
@@ -297,7 +334,15 @@ class Null(_Executor):
         apply(_Executor.__init__, (self,), kw)
     def get_build_env(self):
         import SCons.Util
-        return SCons.Util.Null()
+        class NullEnvironment(SCons.Util.Null):
+            #def get_scanner(self, key):
+            #    return None
+            #def changed_since_last_build(self, dependency, target, prev_ni):
+            #    return dependency.changed_since_last_buld(target, prev_ni)
+            def get_CacheDir(self):
+                import SCons.CacheDir
+                return SCons.CacheDir.Null()
+        return NullEnvironment()
     def get_build_scanner_path(self):
         return None
     def cleanup(self):
