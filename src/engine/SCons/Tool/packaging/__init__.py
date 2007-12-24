@@ -126,7 +126,7 @@ def Package(env, target=None, source=None, **kw):
 
     packagers=map(load_packager, PACKAGETYPE)
 
-    kw.setdefault('SHORTNAME', kw['NAME'])
+    kw.setdefault('SHORTNAME', kw.get('NAME'))
 
     # now try to setup the default_target and the default PACKAGEROOT
     # arguments.
