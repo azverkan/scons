@@ -68,14 +68,19 @@ internal or external command, operable program or batch file.
 scons: *** [%s] Error 1
 """
 
-not_found_1 = """
+not_found_1 = """\
 sh: %s: not found
 scons: *** [%s] Error 1
 """
 
-not_found_2 = """
+not_found_2 = """\
 sh: %s:  not found
 scons: *** [%s] Error 1
+"""
+
+not_found_3 = """\
+sh: %s: not found
+scons: *** [%s] Error 127
 """
 
 No_such = """\
@@ -98,8 +103,18 @@ permission_denied = """\
 scons: *** [%s] Error 126
 """
 
+cannot_execute_permission_denied = """\
+%s: cannot execute - Permission denied
+scons: *** [%s] Error 126
+"""
+
 is_a_directory = """\
 %s: is a directory
+scons: *** [%s] Error 126
+"""
+
+cannot_execute_is_a_directory = """\
+%s: cannot execute - Is a directory
 scons: *** [%s] Error 126
 """
 
@@ -115,6 +130,7 @@ else:
     errs = [
         not_found_1 % (no_such_file, 'f1'),
         not_found_2 % (no_such_file, 'f1'),
+        not_found_3 % (no_such_file, 'f1'),
         No_such % (no_such_file, 'f1'),
     ]
     error_message_not_found = 1
@@ -122,6 +138,7 @@ else:
         if string.find(test.stderr(), err) != -1:
             error_message_not_found = None
             break
+    #raise repr(test.stderr())+'\n'+repr(errs)
     test.fail_test(error_message_not_found)
 
 test.write('SConstruct2', r"""
@@ -148,6 +165,7 @@ else:
         cannot_execute % (not_executable, 'f2'),
         Permission_denied % (not_executable, 'f2'),
         permission_denied % (not_executable, 'f2'),
+        cannot_execute_permission_denied % (not_executable, 'f2'),
     ]
     error_message_not_found = 1
     for err in errs:
@@ -179,6 +197,7 @@ else:
     errs = [
         cannot_execute % (not_executable, 'f3'),
         is_a_directory % (test.workdir, 'f3'),
+        cannot_execute_is_a_directory % (test.workdir, 'f3'),
     ]
     error_message_not_found = 1
     for err in errs:
