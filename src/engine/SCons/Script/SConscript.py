@@ -206,7 +206,7 @@ def _SConscript(fs, *files, **kw):
                     f.built()
                     f.builder_set(None)
                     if f.exists():
-                        _file=_ = open(f.get_abspath(), "r")
+                        _file_ = open(f.get_abspath(), "r")
 
                 if _file_:
                     # Chdir to the SConscript directory.  Use a path
