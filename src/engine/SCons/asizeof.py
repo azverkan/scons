@@ -289,10 +289,22 @@ def _printf(fmt, *args, **print3opts):
         print(fmt)
 
 
-class Referent():
+class _NamedReferent(object):
+    '''Store the referred object along with the name of the referent.
+    '''
     def __init__(self, name, ref):
         self.name = name
         self.ref = ref
+
+class SizedObject(object):
+    '''Record to store sized object that contains also per-referent size
+    informations.
+    '''
+    def __init__(self, size, base, refs=[], label=None):
+        self.base = base
+        self.size = size
+        self.refs = refs
+        self.label = label
 
 def _refs(obj, *ats, **kwds):
     '''Return specific attribute objects of an object.
@@ -301,12 +313,12 @@ def _refs(obj, *ats, **kwds):
         if hasattr(obj, a):
             #tmp = (a, getattr(obj, a))
             #yield getattr(obj,a)
-            yield Referent(a, getattr(obj, a))
+            yield _NamedReferent(a, getattr(obj, a))
     if kwds:  # kwds are _dir() args
         for a in _dir(obj, **kwds):
             #tmp = (a, getattr(obj, a))
             #yield getattr(obj,a)
-            yield Referent(a, getattr(obj, a))
+            yield _NamedReferent(a, getattr(obj, a))
 
 def _repr(obj, clip=80):
     '''Clip long repr() string.
@@ -355,8 +367,8 @@ def _dict_refs(obj):
     '''
      # dict.iteritems removed in Python 3.0
     for k, v in _items(obj):
-        yield Referent('[K] %s' % str(k), k)
-        yield Referent('[V] %s' % str(k), v)
+        yield _NamedReferent('[K] %s' % str(k), k)
+        yield _NamedReferent('[V] %s' % str(k), v)
         #yield KeyValueRef(key=k, value=v)
         #yield k
         #yield v
@@ -1060,7 +1072,7 @@ class Asizer(object):
         if i in self._seen:
             self._seen[i] += 1
             if deep:
-                return (s, base, chld)
+                return SizedObject(s, base)
         else:
             self._seen[i]  = 1
         try:
@@ -1090,16 +1102,16 @@ class Asizer(object):
                         r, d = v.refs, deep + 1
                         for o in r(obj):  # no sum(<generator_expression>) in Python 2.2
                             label = ''
-                            if isinstance(o, Referent):
+                            if isinstance(o, _NamedReferent):
                                 label = o.name
                                 o = o.ref
                             else:
                                 label = repr(o)
                             if deep < self._detail:
                                 so = self._recursive_sizer(o,d)
-                                so = so + (label,)
+                                so.label = label
                                 chld.append(so)
-                                s += so[0]
+                                s += so.size
                             else:
                                 s += self._sizer(o,d)
                          # recursion depth
@@ -1107,7 +1119,7 @@ class Asizer(object):
                            self._depth = d
         except RuntimeError:  # XXX RecursionLimitExceeded:
             pass
-        return (s, base, chld)
+        return SizedObject(s, base, refs=chld)
 
     def _sizer(self, obj, deep):
         '''Size an object, recursively.
@@ -1146,7 +1158,7 @@ class Asizer(object):
                          # add sizes of referents
                         r, z, d = v.refs, self._sizer, deep + 1
                         for o in r(obj):  # no sum(<generator_expression>) in Python 2.2
-                            if isinstance(o, Referent):
+                            if isinstance(o, _NamedReferent):
                                 s += z(o.ref, d)
                             else:
                                 s += z(o, d)
@@ -1242,12 +1254,15 @@ class Asizer(object):
         return s
 
     def asizeof_rec(self, obj, detail=0, **opts):
+        '''Return an SizedObject instance with recursive referent lists up to the
+        given detail level (recursion depth).
+        '''
         self.set(**opts)
         self.exclude_refs(obj)
         self._detail = detail
         z = self._recursive_sizer
         s = z(obj,0)
-        self._total += s[0]
+        self._total += s.size
         return s            
 
     def asizesof(self, *objs, **opts):

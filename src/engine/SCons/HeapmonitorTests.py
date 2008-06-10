@@ -125,13 +125,13 @@ class TrackObjectTestCase(unittest.TestCase):
         create_snapshot()
 
         fp = tracked_objects[id(foo)].footprint[-1]
-        refs = fp[1][2]
-        dict = [r for r in refs if r[3] == '__dict__']
-        assert len(dict) == 1
-        dict = dict[0]
-        assert dict[0] > 0
-        assert dict[1] > 0
-        assert dict[2] == []
+        refs = fp[1].refs
+        dref = [r for r in refs if r.label == '__dict__']
+        assert len(dref) == 1
+        dref = dref[0]
+        assert dref.size > 0
+        assert dref.base > 0
+        assert dref.refs == []
         
 
 class TrackClassTestCase(unittest.TestCase):

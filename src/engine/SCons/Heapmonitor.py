@@ -155,20 +155,21 @@ class TrackedObject(object):
 
         #initial_size = SCons.asizeof.basicsize(instance)
         initial_size = SCons.asizeof.basicsize(instance) or 0
-        self.footprint = [(self.birth, (initial_size, initial_size, []))]
+        so = SCons.asizeof.SizedObject(initial_size, initial_size)
+        self.footprint = [(self.birth, so)]
 
     def _print_refs(self, file, refs, total, prefix='    ', level=1, 
         minsize=8, minpct=1):
         """
         Print individual referents recursively.
         """
-        lcmp = lambda i, j: (i[0] > j[0]) and -1 or (i[0] < j[0]) and 1 or 0
+        lcmp = lambda i, j: (i.size > j.size) and -1 or (i.size < j.size) and 1 or 0
         refs.sort(lcmp)
         for r in refs:
-            if r[0] > minsize and (r[0]*100.0/total) > minpct:
-                file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r[3]),50),
-                    _pp(r[0]),int(r[0]*100.0/total), level))
-                self._print_refs(file, r[2], r[0], prefix=prefix+'  ', level=level+1)
+            if r.size > minsize and (r.size*100.0/total) > minpct:
+                file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r.label),50),
+                    _pp(r.size),int(r.size*100.0/total), level))
+                self._print_refs(file, r.refs, r.size, prefix=prefix+'  ', level=level+1)
 
     def print_text(self, file, full=0):
         """
@@ -184,8 +185,8 @@ class TrackedObject(object):
                 file.write('%-32s 0x%08x %-35s\n' % (
                     _trunc(self.name, 32, left=1), id(obj), _trunc(repr, 35)))
             for (ts, size) in self.footprint:
-                file.write('  %-30s %s\n' % (_get_timestamp(ts), _pp(size[0])))
-                self._print_refs(file, size[2], size[0])                    
+                file.write('  %-30s %s\n' % (_get_timestamp(ts), _pp(size.size)))
+                self._print_refs(file, size.refs, size.size)                    
             if self.death is not None:
                 file.write('  %-30s finalize\n' % _get_timestamp(ts))
         else:
@@ -217,7 +218,7 @@ class TrackedObject(object):
         recorded.
         """
         try:
-            return max([s[0] for (t, s) in self.footprint])
+            return max([s.size for (t, s) in self.footprint])
         except ValueError:
             return 0
 
@@ -228,7 +229,7 @@ class TrackedObject(object):
         """
         for (t, s) in self.footprint:
             if t == ts:
-                return s[0]
+                return s.size
         return 0
 
     def set_resolution_level(self, resolution_level):
