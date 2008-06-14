@@ -48,6 +48,7 @@ import time
 import cStringIO
 
 import SCons.Action
+import SCons.Comments
 from SCons.Debug import logInstanceCreation
 import SCons.Errors
 import SCons.Memoize
@@ -2150,14 +2151,12 @@ class File(Base):
     def Entry(self, name):
         """Create an entry node named 'name' relative to
         the SConscript directory of this file."""
-        cwd = self.cwd or self.fs._cwd
-        return cwd.Entry(name)
+        return self.cwd.Entry(name)
 
     def Dir(self, name, create=True):
         """Create a directory node named 'name' relative to
         the SConscript directory of this file."""
-        cwd = self.cwd or self.fs._cwd
-        return cwd.Dir(name, create)
+        return self.cwd.Dir(name, create)
 
     def Dirs(self, pathlist):
         """Create a list of directories relative to the SConscript
@@ -2167,8 +2166,7 @@ class File(Base):
     def File(self, name):
         """Create a file node named 'name' relative to
         the SConscript directory of this file."""
-        cwd = self.cwd or self.fs._cwd
-        return cwd.File(name)
+        return self.cwd.File(name)
 
     #def generate_build_dict(self):
     #    """Return an appropriate dictionary of values for building
@@ -2697,6 +2695,13 @@ class File(Base):
         self.changed_since_last_build = self.decide_target
 
     def changed_content(self, target, prev_ni):
+        d, t = str(self), str(target)
+        piece = SCons.Comments.Stripper(self, target, prev_ni)
+        if piece == SCons.Comments.SIGS_DIFFER:
+            return 1
+        elif piece == SCons.Comments.SIGS_EQUAL:
+            return 0
+
         cur_csig = self.get_csig()
         try:
             return cur_csig != prev_ni.csig
