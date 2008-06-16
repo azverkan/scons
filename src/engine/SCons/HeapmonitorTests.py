@@ -126,13 +126,25 @@ class TrackObjectTestCase(unittest.TestCase):
 
         fp = tracked_objects[id(foo)].footprint[-1]
         refs = fp[1].refs
-        dref = [r for r in refs if r.label == '__dict__']
+        dref = [r for r in refs if r.name == '__dict__']
         assert len(dref) == 1
         dref = dref[0]
         assert dref.size > 0
-        assert dref.base > 0
-        assert dref.refs == []
-        
+        assert dref.flat > 0
+        assert dref.refs == ()
+
+        # Test track_change and more fine-grained resolution
+        track_change(foo, resolution_level=2)
+        create_snapshot()
+
+        fp = tracked_objects[id(foo)].footprint[-1]
+        refs = fp[1].refs
+        dref = [r for r in refs if r.name == '__dict__']
+        assert len(dref) == 1
+        dref = dref[0]
+        namerefs = [r.name for r in dref.refs]
+        assert '[K] foo' in namerefs
+        assert '[V] foo' in namerefs        
 
 class TrackClassTestCase(unittest.TestCase):
 

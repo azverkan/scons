@@ -155,7 +155,7 @@ class TrackedObject(object):
 
         #initial_size = SCons.asizeof.basicsize(instance)
         initial_size = SCons.asizeof.basicsize(instance) or 0
-        so = SCons.asizeof.SizedObject(initial_size, initial_size)
+        so = SCons.asizeof.Asized(initial_size, initial_size)
         self.footprint = [(self.birth, so)]
 
     def _print_refs(self, file, refs, total, prefix='    ', level=1, 
@@ -164,8 +164,9 @@ class TrackedObject(object):
         Print individual referents recursively.
         """
         lcmp = lambda i, j: (i.size > j.size) and -1 or (i.size < j.size) and 1 or 0
-        refs.sort(lcmp)
-        for r in refs:
+        lrefs = list(refs)
+        lrefs.sort(lcmp)
+        for r in lrefs:
             if r.size > minsize and (r.size*100.0/total) > minpct:
                 file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r.label),50),
                     _pp(r.size),int(r.size*100.0/total), level))
@@ -205,7 +206,7 @@ class TrackedObject(object):
         objects.
         """
         obj = self.ref()
-        self.footprint.append( (ts, sizer.asizeof_rec(obj,
+        self.footprint.append( (ts, sizer.asized(obj,
             detail=self._resolution_level)) )
 
         #s = sizer.asizeof(obj) # XXX
