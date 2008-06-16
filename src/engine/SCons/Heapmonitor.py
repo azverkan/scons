@@ -165,7 +165,7 @@ class TrackedObject(object):
         lrefs.sort(lcmp)
         for r in lrefs:
             if r.size > minsize and (r.size*100.0/total) > minpct:
-                file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r.label),50),
+                file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r.name),50),
                     _pp(r.size),int(r.size*100.0/total), level))
                 self._print_refs(file, r.refs, r.size, prefix=prefix+'  ', level=level+1)
 
