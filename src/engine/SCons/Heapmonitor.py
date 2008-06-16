@@ -70,6 +70,11 @@ _constructors = {}
 # Fixpoint for program start relative time stamp.
 _local_start = time.time()
 
+def _is_tracked(klass):
+    """
+    Determine if the class is tracked.
+    """
+    return _constructors.has_key(klass)
 
 def _inject_constructor(klass, f, name, resolution_level, keep):
     """
@@ -78,7 +83,7 @@ def _inject_constructor(klass, f, name, resolution_level, keep):
     Therefore, prevent constructor chaining by multiple calls with the same
     class.
     """
-    if _constructors.has_key(klass):
+    if _is_tracked(klass):
         return
 
     try:
@@ -94,7 +99,6 @@ def _inject_constructor(klass, f, name, resolution_level, keep):
     _constructors[klass] = ki
     klass.__init__ = new.instancemethod(
         lambda *args, **kwds: f(ki, name, resolution_level, keep, *args, **kwds), None, klass)
-
 
 def _restore_constructor(klass):
     """
@@ -156,7 +160,7 @@ class TrackedObject(object):
         self.footprint = [(self.birth, so)]
 
     def _print_refs(self, file, refs, total, prefix='    ', level=1, 
-        minsize=8, minpct=1):
+        minsize=0, minpct=0.1):
         """
         Print individual referents recursively.
         """
@@ -167,7 +171,7 @@ class TrackedObject(object):
             if r.size > minsize and (r.size*100.0/total) > minpct:
                 file.write('%-50s %-14s %3d%% [%d]\n' % (_trunc(prefix+str(r.name),50),
                     _pp(r.size),int(r.size*100.0/total), level))
-                self._print_refs(file, r.refs, r.size, prefix=prefix+'  ', level=level+1)
+                self._print_refs(file, r.refs, total, prefix=prefix+'  ', level=level+1)
 
     def print_text(self, file, full=0):
         """
@@ -305,13 +309,16 @@ def track_object(instance, name=None, resolution_level=0, keep=0):
         _keepalive.append(instance)
 
 
-def track_class(cls, name=None, resolution_level=0, keep=0):
+def track_class(cls, name=None, resolution_level=0, keep=0, force=0):
     """
     Track all objects of the class 'cls'. Objects of that type that already
     exist are _not_ tracked.
     A constructor is injected to begin instance tracking on creation
     of the object. The constructor calls 'track_object' internally.
     """
+    if force and _is_tracked(cls):
+        detach_class(cls)
+
     _inject_constructor(cls, _tracker, name, resolution_level, keep)
 
 
@@ -487,34 +494,41 @@ def attach_default():
     """
     import SCons.Node
 
-    track_class(SCons.Node.FS.Base)
-    track_class(SCons.Node.FS.Dir)
-    track_class(SCons.Node.FS.RootDir)
-    track_class(SCons.Node.FS.File)
-    track_class(SCons.Node.Node)
+    track_class(SCons.Node.FS.Base, name='Node.FS.Base')
+    track_class(SCons.Node.FS.Dir, name='Node.FS.Dir')
+    track_class(SCons.Node.FS.RootDir, name='Node.FS.RootDir')
+    track_class(SCons.Node.FS.File, name='Node.FS.File')
+    track_class(SCons.Node.Node, name='Node.Node')
 
     import SCons.Executor
 
-    track_class(SCons.Executor.Executor)
-    track_class(SCons.Executor.Null)
+    track_class(SCons.Executor.Executor, name='Executor.Executor')
+    track_class(SCons.Executor.Null, name='Executor.Null')
 
     import SCons.Environment
 
-    track_class(SCons.Environment.Base)
-    track_class(SCons.Environment.SubstitutionEnvironment)
+    track_class(SCons.Environment.Base, name='Environment.Base')
+    track_class(SCons.Environment.SubstitutionEnvironment,
+        name='Environment.SubstitutionEnvironment')
     # track_class(SCons.Environment.EnvironmentClone) # TODO
-    track_class(SCons.Environment.OverrideEnvironment)
+    track_class(SCons.Environment.OverrideEnvironment,
+        name='Environment.OverrideEnvironment')
 
     import SCons.Action
 
-    track_class(SCons.Action.CommandAction)
-    track_class(SCons.Action.CommandGeneratorAction)
-    track_class(SCons.Action.LazyAction)
-    track_class(SCons.Action.FunctionAction)
-    track_class(SCons.Action.ListAction)
+    track_class(SCons.Action.CommandAction, name='Action.CommandAction')
+    track_class(SCons.Action.CommandGeneratorAction,
+        name='Action.CommandGeneratorAction')
+    track_class(SCons.Action.LazyAction, name='Action.LazyAction')
+    track_class(SCons.Action.FunctionAction, name='Action.FunctionAction')
+    track_class(SCons.Action.ListAction, name='Action.ListAction')
 
     import SCons.Builder
 
-    track_class(SCons.Builder.BuilderBase)
-    track_class(SCons.Builder.OverrideWarner)
-    track_class(SCons.Builder.CompositeBuilder)
+    track_class(SCons.Builder.BuilderBase, name='Builder.BuilderBase')
+    track_class(SCons.Builder.OverrideWarner, name='Builder.OverrideWarner')
+    track_class(SCons.Builder.CompositeBuilder, name='Builder.CompositeBuilder')
+
+    import SCons.SConsign
+    
+    track_class(SCons.SConsign.DB, name='SConsign.DB')

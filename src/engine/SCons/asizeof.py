@@ -353,7 +353,7 @@ def _dict_refs(obj):
     for k, v in _items(obj):
         s = str(k)
         yield _NamedRef('[K] ' + s, k)
-        yield _NamedRef('[V] ' + s, v)
+        yield _NamedRef('[V] ' + s + ': ' + _repr(v), v)
 
 def _enum_refs(obj):
     '''Return specific referents of an enumerate object.

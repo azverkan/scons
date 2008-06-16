@@ -144,7 +144,7 @@ class TrackObjectTestCase(unittest.TestCase):
         dref = dref[0]
         namerefs = [r.name for r in dref.refs]
         assert '[K] foo' in namerefs
-        assert '[V] foo' in namerefs        
+        assert "[V] foo: 'foo'" in namerefs        
 
 class SnapshotTestCase(unittest.TestCase):
 
@@ -167,8 +167,6 @@ class SnapshotTestCase(unittest.TestCase):
         refts = [fp.timestamp for fp in footprint]
         for to in tracked_objects.values():
             ts = [t for (t,sz) in to.footprint[1:]]
-            print ts
-            print refts
             assert ts == refts
 
     def test_desc(self):
@@ -264,6 +262,22 @@ class TrackClassTestCase(unittest.TestCase):
         assert id(bar2) not in tracked_objects
 
         self.assertRaises(KeyError, detach_class, Foo)
+
+    def test_force(self):
+        """Test forceful reregistering.
+        """
+        track_class(Foo, name='Foobar')
+        track_class(Foo, name='Baz') # ignored
+        foo = Foo()
+
+        assert 'Foobar' in tracked_index
+        assert 'Baz' not in tracked_index
+        assert tracked_index['Foobar'][0].ref() == foo
+
+        track_class(Foo, name='Baz', force=1)
+        fob = Foo()
+        assert 'Baz' in tracked_index
+        assert tracked_index['Baz'][0].ref() == fob
 
 
 if __name__ == "__main__":
