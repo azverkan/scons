@@ -100,11 +100,8 @@ def _restore_constructor(klass):
     """
     Restore the original constructor, lose track of class.
     """
-    if _constructors.has_key(klass):
-        klass.__init__ = _constructors.pop(klass)
-
-    else: # class is not tracked
-        raise ValueError
+    klass.__init__ = _constructors[klass]
+    del _constructors[klass]
 
 
 def _tracker(__init__, __name__, __resolution_level__, __keep__, self, *args, **kwds):
@@ -344,6 +341,13 @@ def detach_all():
     tracked_index.clear()
     _keepalive[:] = []
 
+def clear():
+    """
+    Clear all gathered data and detach from all tracked objects/classes.
+    """
+    detach_all()
+    footprint[:] = []
+
 class Footprint:
     pass
 
@@ -376,7 +380,7 @@ def create_snapshot(description=''):
     fp.tracked_total = sizer.total
     fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
     fp.system_total = SCons.Debug.memory()
-    fp.desc = description
+    fp.desc = str(description)
 
     # TODO Compute overhead of all structures, exclude tracked objects(!)
     # overhead = sizer.asizeof(self) # compute actual profiling overhead

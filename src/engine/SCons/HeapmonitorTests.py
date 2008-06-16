@@ -28,7 +28,7 @@ import TestCmd
 
 from SCons.Heapmonitor import *
 
-class Foo():
+class Foo:
     def __init__(self):
         self.foo = 'foo'
 
@@ -146,6 +146,45 @@ class TrackObjectTestCase(unittest.TestCase):
         assert '[K] foo' in namerefs
         assert '[V] foo' in namerefs        
 
+class SnapshotTestCase(unittest.TestCase):
+
+    def setUp(self):
+        clear()
+
+    def test_timestamp(self):
+        """Test timestamp of snapshots.
+        """
+        foo = Foo()
+        bar = Bar()
+
+        track_object(foo)
+        track_object(bar)
+
+        create_snapshot()
+        create_snapshot()
+        create_snapshot()
+
+        refts = [fp.timestamp for fp in footprint]
+        for to in tracked_objects.values():
+            ts = [t for (t,sz) in to.footprint[1:]]
+            print ts
+            print refts
+            assert ts == refts
+
+    def test_desc(self):
+        """Test footprint description.
+        """
+        create_snapshot()
+        create_snapshot('alpha')
+        create_snapshot(description='beta')
+        create_snapshot(42)
+
+        assert len(footprint) == 4
+        assert footprint[0].desc == ''
+        assert footprint[1].desc == 'alpha'
+        assert footprint[2].desc == 'beta'
+        assert footprint[3].desc == '42'
+
 class TrackClassTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -224,15 +263,15 @@ class TrackClassTestCase(unittest.TestCase):
         assert id(foo2) not in tracked_objects
         assert id(bar2) not in tracked_objects
 
-        self.assertRaises(ValueError, detach_class, Foo)
+        self.assertRaises(KeyError, detach_class, Foo)
 
 
 if __name__ == "__main__":
     suite = unittest.TestSuite()
     tclasses = [ TrackObjectTestCase,
-                 TrackClassTestCase
+                 TrackClassTestCase,
+                 SnapshotTestCase
                  # RecursionLevelTestCase,
-                 # SnapshotTestCase,
                ]
     for tclass in tclasses:
         names = unittest.getTestCaseNames(tclass, 'test_')
