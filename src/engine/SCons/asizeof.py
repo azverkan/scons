@@ -6,13 +6,15 @@
 # <http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/546530>
 # <http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/544288>
 
-'''This module exposes 8 functions and 1 class to obtain lengths
+'''This module exposes 9 functions and 2 classes to obtain lengths
    and sizes of Python objects (for Python 2.2 or later).
 
    Function  asizeof calculates the combined (approximate) size
    of one or several Python objects in bytes.  Function  asizesof
    returns a tuple containing the (approximate) size in bytes for
-   each given Python object separately.
+   each given Python object separately.  Function  asized returns
+   for each object an instance of class Asized containing all the
+   size information of the object and a tuple of referents.
 
    Functions  basicsize and  itemsize return the basic resp. item
    size of the given object.
@@ -20,18 +22,21 @@
    Function  flatsize returns the flat size of a Python object in
    bytes defined as the basic size plus the item size times the
    length of the given object.  The size returned by  flatsize is
-   at least the size returned by  sys.getsizeof in Python 2.6+.
+   at least the size returned by  sys.getsizeof if the latter is
+   available.
 
    Function  leng returns the length of an object, like standard
    len but extended for several types, e.g. the  leng of a multi-
-   precision int (or long) is the number of digits**.
+   precision int (or long) is the number of digits**.  For some
+   mutable objects, the value returned by  leng may exceed the
+   len value.
 
    Function  refs returns (a generator for) the referents of the
    given object, i.e. the objects referenced by the given object.
 
    Certain classes are known to be sub-classes of or behave as
    dict objects.  Function  adict can be used to install other
-   class objects to be treated as dict.
+   class objects to be treated like dict.
 
    Class  Asizer can be used to accumulate the results of several
    asizeof or  asizesof calls.  After creating an  Asizer instance,
@@ -41,21 +46,21 @@
    one of the  print_... methods to report the statistics.
 
 
-   The size of an object is defined as the sum of the flat size of
-   the object and the the sizes of any referents.  Referents are
-   visited recursively up to a given limit.  The size of objects
-   referenced multiple times is included only once.
+   The size of an object is defined as the sum of the flat size
+   of the object and the the sizes of any referents.  Referents
+   are visited recursively up to a given limit.  But the size of
+   objects referenced multiple times is included only once.
 
    The flat size of an object is defined as the basic size of the
    object plus the item size times the number of items.  The flat
-   size does include the items (which may contain references to
-   the referents), but does not include the referents themselves.
+   size does include the size for the items (which may contain
+   references to the referents), but not the referents themselves.
    The flat size equals the result of the  asizeof function with
-   recursion limit zero and without size alignment.
+   recursion limit and size alignment both zero.
 
    The leng(th) and (flat) size of mutable sequence objects as
    dicts, lists, sets, etc. includes an estimate for the over-
-   allocation of the items space.
+   allocation of the items.
 
 
    The basic and item sizes are obtained from the __basicsize__
@@ -64,7 +69,8 @@
    replaced by the size of the C typedef of the item.
 
    The (byte)code size of objects as classes, functions, methods,
-   modules, etc. can be included, optionally.
+   modules, etc. can be included, optionally except for builtin
+   ones.
 
    Sizes can be aligned to a given alignment (power of 2).
 
@@ -96,9 +102,10 @@
    These definitions and other assumptions are rather arbitrary
    and may need corrections or adjustments.
 
-   Tested with Python 2.2.3, 2.3.4, 2.4.4, 2.5.1, 2.5.2, 2.6a3
-   or 3.0a4 on RHEL 3u7, CentOS 4.6, SuSE 9.3, MacOS X Tiger
-   (Intel) and Panther (PPC), Solaris 10 and Windows XP.
+   Tested with Python 2.2.3, 2.3.4, 2.4.4, 2.5.1, 2.5.2, 2.6a3 or
+   3.0a5 on CentOS 4.6, SuSE 9.3, MacOS X 10.4.11 Tiger (Intel)
+   and Panther 10.3.9 (PPC), Solaris 10 and Windows XP all 32-bit
+   Python and on RHEL 3u7 and Solaris 10 both 64-bit Python.
 
    The functions and classes in this module are not thread-safe.
 
@@ -120,8 +127,9 @@ from sys        import modules, getrecursionlimit, stdout
 import types    as     Types
 import weakref  as     Weakref
 
-__version__ = '3.25 (June 15, 2008)'
-__all__     = ['adict', 'asizeof', 'asizesof', 'Asized', 'Asizer',
+__version__ = '3.33 (June 17, 2008)'
+__all__     = ['adict', 'asized', 'asizeof', 'asizesof',
+               'Asized', 'Asizer',  # classes
                'basicsize', 'flatsize', 'itemsize', 'leng', 'refs']
 
  # any classes or types in modules listed in _builtin_modules
@@ -294,15 +302,23 @@ def _printf(fmt, *args, **print3opts):
     else:
         print(fmt)
 
-def _refs(obj, *ats, **kwds):
+def _refs(obj, named, *ats, **kwds):
     '''Return specific attribute objects of an object.
     '''
-    for a in ats:  # cf. inspect.getmembers()
-        if hasattr(obj, a):
-            yield _NamedRef(a, getattr(obj, a))
-    if kwds:  # kwds are _dir() args
-        for a in _dir(obj, **kwds):
-            yield _NamedRef(a, getattr(obj, a))
+    if named:
+        for a in ats:  # cf. inspect.getmembers()
+            if hasattr(obj, a):
+                yield _NamedRef(a, getattr(obj, a))
+        if kwds:  # kwds are _dir() args
+            for a in _dir(obj, **kwds):
+                yield _NamedRef(a, getattr(obj, a))
+    else:
+        for a in ats:  # cf. inspect.getmembers()
+            if hasattr(obj, a):
+                yield getattr(obj, a)
+        if kwds:  # kwds are _dir() args
+            for a in _dir(obj, **kwds):
+                yield getattr(obj, a)
 
 def _repr(obj, clip=80):
     '''Clip long repr() string.
@@ -336,96 +352,103 @@ def _SI2(size, **kwds):
 
  # type-specific referent functions
 
-def _class_refs(obj):
+def _class_refs(obj, named):
     '''Return specific referents of a class object.
     '''
-    return _refs(obj, '__class__', '__dict__', '__doc__', '__mro__', '__name__', '__slots__', '__weakref__')
+    return _refs(obj, named, '__class__', '__dict__', '__doc__', '__mro__',
+                             '__name__', '__slots__', '__weakref__')
 
-def _co_refs(obj):
+def _co_refs(obj, named):
     '''Return specific referents of a code object.
     '''
-    return _refs(obj, pref='co_')
+    return _refs(obj, named, pref='co_')
 
-def _dict_refs(obj):
+def _dict_refs(obj, named):
     '''Return key and value objects of a dict/proxy.
     '''
-     # dict.iteritems removed in Python 3.0
-    for k, v in _items(obj):
-        s = str(k)
-        yield _NamedRef('[K] ' + s, k)
-        yield _NamedRef('[V] ' + s + ': ' + _repr(v), v)
+    if named:
+        for k, v in _items(obj):
+            s = str(k)
+            yield _NamedRef('[K] ' + s, k)
+            yield _NamedRef('[V] ' + s + ': ' + _repr(v), v)
+    else:
+        for k, v in _items(obj):
+            yield k
+            yield v
 
-def _enum_refs(obj):
+def _enum_refs(obj, named):
     '''Return specific referents of an enumerate object.
     '''
-    return _refs(obj, '__doc__')
+    return _refs(obj, named, '__doc__')
 
-def _exc_refs(obj):
+def _exc_refs(obj, named):
     '''Return specific referents of an Exception object.
     '''
      # .message raises DeprecationWarning in Python 2.6
-    return _refs(obj, 'args', 'filename', 'lineno', 'msg', 'text')  # message, mixed
+    return _refs(obj, named, 'args', 'filename', 'lineno', 'msg', 'text')  # , 'message', 'mixed'
 
-def _file_refs(obj):
+def _file_refs(obj, named):
     '''Return specific referents of a file object.
     '''
-    return _refs(obj, 'mode', 'name')
+    return _refs(obj, named, 'mode', 'name')
 
-def _frame_refs(obj):
+def _frame_refs(obj, named):
     '''Return specific referents of a frame object.
     '''
-    return _refs(obj, pref='f_')
+    return _refs(obj, named, pref='f_')
 
-def _func_refs(obj):
+def _func_refs(obj, named):
     '''Return specific referents of a function or lambda object.
     '''
-    return _refs(obj, '__doc__', '__name__', '__code__', pref='func_', excl=('func_globals',))
+    return _refs(obj, named, '__doc__', '__name__', '__code__',
+                             pref='func_', excl=('func_globals',))
 
-def _gi_refs(obj):
+def _gi_refs(obj, named):
     '''Return specific referents of a generator object.
     '''
-    return _refs(obj, pref='gi_')
+    return _refs(obj, named, pref='gi_')
 
-def _im_refs(obj):
+def _im_refs(obj, named):
     '''Return specific referents of a method object.
     '''
-    return _refs(obj, '__doc__', '__name__', '__code__', pref='im_')
+    return _refs(obj, named, '__doc__', '__name__', '__code__', pref='im_')
 
-def _inst_refs(obj):
+def _inst_refs(obj, named):
     '''Return specific referents of a class instance.
     '''
-    return _refs(obj, '__dict__', '__slots__', '__class__')
+    return _refs(obj, named, '__dict__', '__slots__', '__class__')
 
-def _module_refs(obj):
+def _module_refs(obj, named):
     '''Return specific referents of a module object.
     '''
      # ignore this very module
     if obj.__name__ == __name__:
         return ()
      # module is essentially a dict
-    return _dict_refs(obj.__dict__)
+    return _dict_refs(obj.__dict__, named)
 
-def _prop_refs(obj):
+def _prop_refs(obj, named):
     '''Return specific referents of a property object.
     '''
-    return _refs(obj, '__doc__', pref='f')
+    return _refs(obj, named, '__doc__', pref='f')
 
-def _seq_refs(obj):
+def _seq_refs(obj, unused):  # named unused for PyChecker
     '''Return specific referents of a frozen/set, list, tuple and xrange object.
     '''
     return obj  # XXX for r in obj: yield r
 
-def _tb_refs(obj):
+def _tb_refs(obj, named):
     '''Return specific referents of a traceback object.
     '''
-    return _refs(obj, pref='tb_')
+    return _refs(obj, named, pref='tb_')
 
-def _type_refs(obj):
+def _type_refs(obj, named):
     '''Return specific referents of a type object.
     '''
-    return _refs(obj, '__dict__', '__doc__', '__mro__', '__name__', '__slots__', '__weakref__')
+    return _refs(obj, named, '__dict__', '__doc__', '__mro__',
+                             '__name__', '__slots__', '__weakref__')
 
-def _weak_refs(obj):
+def _weak_refs(obj, unused):  # named unused for PyChecker
     '''Return weakly referent object.
     '''
     try:  # ignore 'key' of KeyedRef
@@ -433,10 +456,11 @@ def _weak_refs(obj):
     except:  # XXX ReferenceError
         return ()
 
-_all_refs = (None, _class_refs,     _co_refs, _dict_refs, _enum_refs, _exc_refs,
-                    _file_refs,  _frame_refs, _func_refs,   _gi_refs,  _im_refs,
-                    _inst_refs, _module_refs, _prop_refs,  _seq_refs,  _tb_refs,
-                    _type_refs,   _weak_refs)
+_all_refs = (None, _class_refs, _co_refs,   _dict_refs,  _enum_refs,
+                   _exc_refs,   _file_refs, _frame_refs, _func_refs,
+                   _gi_refs,    _im_refs,   _inst_refs,  _module_refs,
+                   _prop_refs,  _seq_refs,  _tb_refs,    _type_refs,
+                   _weak_refs)
 
 
  # type-specific length functions
@@ -458,6 +482,18 @@ def _len_array(obj):
     '''Array length in bytes.
     '''
     return len(obj) * obj.itemsize
+
+def _len_dict(obj):
+    '''Dict length in items.
+    '''
+    n = len(obj)  # active items
+    if n > 5:
+       n += 1  # at least one unused
+       n2 = 16  # nearest power of 2
+       while n > n2:
+           n2 += n2
+       return n2
+    return 0  # ma_smalltable in basicsize
 
 _digit2p2 = 1 << (_sizeof_Cdigit * 8)
 _digitmax = _digit2p2 - 1  # == (2 * PyLong_MASK + 1)
@@ -504,8 +540,9 @@ def _len_struct(obj):
     except AttributeError:
         return 0
 
-_all_lengs = (None, _len,        _len1,        _len_array, _len_int,
-                    _len_module, _len_mutable, _len_slice, _len_struct)
+_all_lengs = (None, _len,         _len1,      _len_array,
+                    _len_dict,    _len_int,   _len_module,
+                    _len_mutable, _len_slice, _len_struct)
 
 
 # more private functions and classes
@@ -526,8 +563,7 @@ _new_style = ''   # no marker
 class _Claskey(object):
     '''Wrapper for class objects.
     '''
-    _obj = None
-    _sty = ''
+    __slots__ = ('_obj', '_sty')
 
     def __init__(self, obj, style):
         self._obj = obj  # XXX Weakref.ref(obj)
@@ -573,7 +609,7 @@ try:  # no Class_ and InstanceType in Python 3.0
     class _Instkey(object):
         '''Wrapper for old-style class (instances).
         '''
-        _obj = None
+        __slots__ = ('_obj',)
 
         def __init__(self, obj):
             self._obj = obj  # XXX Weakref.ref(obj)
@@ -676,7 +712,8 @@ class _Typedef(object):
     def args(self):  # as args tuple
         '''Return all attributes as arguments tuple.
         '''
-        return (self.base, self.item, self.leng, self.refs, self.both, self.kind, self.type)
+        return (self.base, self.item, self.leng, self.refs,
+                self.both, self.kind, self.type)
 
     def dup(self, other=None, **kwds):
         '''Duplicate attributes of dict or other typedef.
@@ -705,7 +742,8 @@ class _Typedef(object):
         if safe_len and self.item:
             self.leng = _len
 
-    def reset(self, base=0, item=0, leng=None, refs=None, both=True, kind=None, type=None):
+    def reset(self, base=0, item=0, leng=None, refs=None,
+                    both=True, kind=None, type=None):
         '''Reset all attributes.
         '''
         if base < 0:
@@ -782,11 +820,11 @@ _typedef_both(type(Ellipsis))
 _typedef_both(type(None))
 
  # dict, dictproxy, dict_proxy and other dict-like types
-_dict_key  = _typedef_both(      dict,     item=_sizeof_CPyDictEntry, leng=_len_mutable, refs=_dict_refs)
+_dict_key = _typedef_both(       dict,     item=_sizeof_CPyDictEntry, leng=_len_dict, refs=_dict_refs)
 try:  # <type dictproxy> only in Python 2.x
-    _typedef_both(Types.DictProxyType,     item=_sizeof_CPyDictEntry, leng=_len_mutable, refs=_dict_refs)
+    _typedef_both(Types.DictProxyType,     item=_sizeof_CPyDictEntry, leng=_len_dict, refs=_dict_refs)
 except AttributeError:  # XXX any class __dict__ is <type dict_proxy> in Python 3.0?
-    _typedef_both(type(_Typedef.__dict__), item=_sizeof_CPyDictEntry, leng=_len_mutable, refs=_dict_refs)
+    _typedef_both(type(_Typedef.__dict__), item=_sizeof_CPyDictEntry, leng=_len_dict, refs=_dict_refs)
  # other dict-like classes and types may be derived or inferred,
  # provided the module and class name is listed here (see functions
  # adict, _isdictclass and _infer_dict for further details)
@@ -1016,9 +1054,14 @@ class _Prof(object):
  # public classes
 
 class Asized(object):
-    '''Store the total and flat size of a sized object
-       plus a name for the object and tuple containing
-       an Asized instance for each of the referents.
+    '''Store the results of a sized object
+       in these attributes:
+
+       size - total size of the object
+       flat - flat size of the object
+       name - name or repr of the object
+       refs - tuple containing an instance
+              of Asized for each referent
     '''
     def __init__(self, size, flat, refs=(), name=None):
         self.size = size  # total size
@@ -1027,8 +1070,8 @@ class Asized(object):
         self.refs = tuple(refs)
 
     def __str__(self):
-        return 'name %r, size %r, flat %r, refs[%d]' % (
-                self.name, self.size, self.flat, len(self.refs))
+        return 'size %r, flat %r, refs[%d], name %r' % (
+                self.size, self.flat, len(self.refs), self.name)
 
 class Asizer(object):
     '''Sizer state and options.
@@ -1056,7 +1099,7 @@ class Asizer(object):
         '''
         try:
             return obj.__name__
-        except AttributeError:
+        except (AttributeError, KeyError):
             return self._repr(obj)
 
     def _prepr(self, obj):
@@ -1099,8 +1142,8 @@ class Asizer(object):
                 v = _typedefs.get(k, None)
                 if not v:  # new type
                     v = self._typedef(obj)
-                    if k in _typedefs:  # and _typedefs[k] != v:  # double check
-                        t = self._repr(obj)
+                    if __debug__ and k in _typedefs:  # and _typedefs[k] != v:  # double check
+                        t = self._nameof(obj)
                         raise KeyError('asizeof %s conflict: %r vs %r' % (t, _typedefs[k], v))
                     _typedefs[k] = v
                   ##_printf('new typedefs [%r] %r', k, v)
@@ -1124,8 +1167,9 @@ class Asizer(object):
                     if v.refs and deep < self._limit_ and not (deep and ismodule(obj)):
                          # add sizes of referents
                         r, z, d = v.refs, self._sizer, deep + 1
-                        for o in r(obj):  # no sum(<generator_expression>) in Python 2.2
-                            if sized and deep < self._detail_:
+                        if sized and deep < self._detail_:
+                             # use named referents
+                            for o in r(obj, True):
                                 if isinstance(o, _NamedRef):
                                     t = z(o.ref, d, sized)
                                     t.name = o.name
@@ -1134,9 +1178,8 @@ class Asizer(object):
                                     t.name = self._nameof(o)
                                 rs.append(t)
                                 s += t.size
-                            elif isinstance(o, _NamedRef):
-                                s += z(o.ref, d, None)
-                            else:
+                        else:  # no sum(<generator_expression>) in Python 2.2
+                            for o in r(obj, False):
                                 s += z(o, d, None)
                          # recursion depth
                         if self._depth < d:
@@ -1220,20 +1263,27 @@ class Asizer(object):
                       refs=_inst_refs)
         return v
 
-    def asized(self, obj, **opts):
-        '''Return an Asized instance with referents up
-           to the given detail level (recursion depth).
+    def asized(self, obj, detail=None, **opts):
+        '''Size an object and return an Asized instance
+           with size information and referents up to the
+           given detail level (with modified options,
+           see method  .set).
         '''
-        self.set(**opts)
+        if opts:
+            self.set(**opts)
+        if detail is not None:
+            self._detail_ = detail
         self.exclude_refs(obj)  # skip refs to obj
         t = self._sizer(obj, 0, Asized)
         self._total += t.size  # accumulate
         return t
 
     def asizeof(self, *objs, **opts):
-        '''Return the combined object size (with modified options).
+        '''Return the combined object size (with
+           modified options, see method  .set).
         '''
-        self.set(**opts)
+        if opts:
+            self.set(**opts)
         self.exclude_refs(*objs)  # skip refs to objs
         s, z = 0, self._sizer
         for o in objs:  # no sum(<generator_expression>) in Python 2.2
@@ -1242,9 +1292,11 @@ class Asizer(object):
         return s
 
     def asizesof(self, *objs, **opts):
-        '''Return the individual object sizes (with modified options).
+        '''Return the individual object sizes (with
+           modified options, see method  .set).
         '''
-        self.set(**opts)
+        if opts:
+            self.set(**opts)
         self.exclude_refs(*objs)  # skip refs to objs
         s, z = 0, self._sizer
         t = tuple([z(o, 0, None) for o in objs])
@@ -1297,14 +1349,22 @@ class Asizer(object):
             if t > 0:
                 _printf('%+*d %r objects', w, t, 'zero', **print3opts)
 
-    def print_stats(self, objs=(), sizes=(), stats=3, **opts):
+    def print_stats(self, objs=(), sized=(), sizes=(), stats=3, **opts):
         '''Print the statistics.
         '''
         s = min(stats, self._stats_)
         if s > 0:  # print stats
             w = 1 + len(str(self._total))
              # print header line(s)
-            if sizes and objs:
+            if sized and objs:
+                n = len(sized)
+                if n > 1:
+                    _printf('%sasized(..., %s) ...', linesep, _kwdstr(**opts))
+                    for i in range(n):  # no enumerate in Python 2.2.3
+                        _printf('%*d: %s', w-1, i, sized[i])
+                else:
+                    _printf('%sasized(%s): %s', linesep, _kwdstr(**opts), sized[0])
+            elif sizes and objs:
                 _printf('%sasizesof(..., %s) ...', linesep, _kwdstr(**opts))
                 for z, o in zip(sizes, objs):
                     _printf('%*d bytes%s%s:  %s', w, z, _SI(z), self._incl, self._repr(o))
@@ -1362,7 +1422,7 @@ class Asizer(object):
             for m, v in _items(_dict_classes):
                 _printf('%*s %s:  %s', w, '', m, self._prepr(v), **print3opts)
 
-    def set(self, align=None, code=None, detail=None, limit=None, stats=None):
+    def set(self, align=None, code=None, limit=None, stats=None):
         '''Set some options.
         '''
          # adjust
@@ -1378,8 +1438,6 @@ class Asizer(object):
             self._code_ = code
             if self._code_:  # incl. (byte)code
                 self._incl = ' (incl. code)'
-        if detail is not None:
-            self._detail_ = detail
         if limit is not None:
             self._limit_ = limit
         if stats is not None:
@@ -1444,9 +1502,10 @@ def adict(*classes):
 _asizer = Asizer()
 
 def asized(*objs, **opts):
-    '''Return a tuple containing an Asized instance for each object
-       passed as positional argment or a single Asized instance if
-       only one object is given using the following options.
+    '''Return a tuple containing an Asized instance for each
+       object passed as positional argment using the following
+       options.  If only one object is given, the return value
+       is the Asized instance for that object.
 
        asized(obj, ..., align=8,      # size alignment
                         clip=80,      # clip repr() strings
@@ -1454,26 +1513,28 @@ def asized(*objs, **opts):
                         derive=False  # derive from super type
                         detail=0      # Asized refs level
                         infer=False   # try to infer types
-                        limit=100)    # recursion limit
+                        limit=100,    # recursion limit
+                        stats=0)      # print statistics
 
        Set  detail to the desired referents level (recursion depth).
 
-       See function  asizeof() for a description of the options.
+       See function  asizeof for descriptions of the other options.
 
-       The length of the returned tuple matches the number of
-       given objects.
+       The length of the returned tuple matches the number of given
+       objects, if more than one object is given.
     '''
-    _asizer.reset(**opts)  # (align=8, clip=80, code=False, derive=False, detail=0, infer=False, limit=100)
     if objs:
+        _asizer.reset(**opts)  # (align=8, clip=80, code=False, derive=False, detail=0, infer=False, limit=100)
         _asizer.exclude_refs(*objs)
         t = [_asizer.asized(o) for o in objs]
+        _asizer.print_stats(objs, sized=t, **opts)  # show opts as _kwdstr
         if len(t) > 1:
             t = tuple(t)
         else:
             t = t[0]
+        _asizer._clear()
     else:
         t = ()
-    _asizer._clear()
     return t
 
 def asizeof(*objs, **opts):
@@ -1548,7 +1609,7 @@ def asizesof(*objs, **opts):
                           limit=100,    # recursion limit
                           stats=0)      # print statistics
 
-       See function  asizeof() for a description of the options.
+       See function  asizeof for a description of the options.
 
        The length of the returned tuple matches the number of
        given objects.
@@ -1625,7 +1686,7 @@ def refs(obj, force=False, **opts):
     if v:
         v = v.refs
         if v and _callable(v):
-            v = v(obj)
+            v = v(obj, False)
     return v
 
 
@@ -1639,7 +1700,7 @@ if __name__ == '__main__':
             a.append(asizeof(obj, limit=d, code=c, infer=infer, stats=stats))
         _printf(" asizeof(%s) is %d, %d, %d", *a)
 
-    def _print_functions(obj, name=None, align=8, limit=MAX, detail=MAX, code=False, **_):
+    def _print_functions(obj, name=None, align=8, detail=MAX, code=False, limit=MAX, **__):
         if name:
             _printf('%sfunctions for %s ...', linesep, name)
         _printf('%s(): %s', ' basicsize', basicsize(obj))
@@ -1647,8 +1708,8 @@ if __name__ == '__main__':
         _printf('%s(): %r', ' leng',      leng(obj))
         _printf('%s(): %s', ' refs',     _repr(refs(obj)))
         _printf('%s(): %s', ' flatsize',  flatsize(obj, align=align, code=code))
-        _printf('%s(): %s', ' asized',          asized(obj, align=align, limit=limit, detail=detail, code=code))
-        _printf('%s(): %s', '.asized',  _asizer.asized(obj, align=align, limit=limit, detail=detail, code=code))
+        _printf('%s(): %s', ' asized',           asized(obj, align=align, detail=detail, code=code, limit=limit))
+      ##_printf('%s(): %s', '.asized',   _asizer.asized(obj, align=align, detail=detail, code=code, limit=limit))
 
     def _bool(arg):
         a = arg.lower()
@@ -1681,7 +1742,7 @@ if __name__ == '__main__':
         opts, i = _aopts(argv, align=8, clip=80, code=False, derive=False, detail=MAX, limit=MAX, stats=0)
         while i < len(argv):
             m, i = argv[i], i + 1
-            if m == 'eval':
+            if m == 'eval' and i < len(argv):
                 o, i = eval(argv[i]), i + 1
             else:
                 o = __import__(m)
@@ -1806,6 +1867,8 @@ if __name__ == '__main__':
 
         _printf('%sasizesof(%s, limit=%s, code=%s) ...', linesep, 'globals(), locals()', 'MAX', False)
         asizesof(globals(), locals(), limit=MAX, code=False, stats=1)
+
+        asized(globals(), align=0, detail=MAX, limit=MAX, code=False, stats=1)
 
 
 # License file from an earlier version of this source file follows:

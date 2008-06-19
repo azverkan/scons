@@ -43,6 +43,7 @@ import time
 
 import weakref
 import new
+import inspect
 
 import SCons.asizeof
 import SCons.Debug
@@ -64,19 +65,45 @@ footprint = []
 # Keep objects alive by holding a strong reference.
 _keepalive = [] 
 
-# Overridden constructors of tracked classes (identified by classname).
-_constructors = {}
+# Dictionary of class observers identified by classname.
+_observers = {}
 
 # Fixpoint for program start relative time stamp.
 _local_start = time.time()
+
+class _ClassObserver(object):
+    """
+    Stores options for tracked classes.
+    The observer also keeps the original constructor of the observed class.
+    """
+    __slots__ = ('init', 'name', 'detail', 'keep', 'trace')
+
+    def __init__(self, init, name, detail, keep, trace):
+        self.init = init
+        self.name = name
+        self.detail = detail
+        self.keep = keep
+        self.trace = trace
+
+    def modify(self, name, detail, keep, trace):
+        self.name = name
+        self.detail = detail
+        self.keep = keep
+        self.trace = trace
 
 def _is_tracked(klass):
     """
     Determine if the class is tracked.
     """
-    return _constructors.has_key(klass)
+    return _observers.has_key(klass)
 
-def _inject_constructor(klass, f, name, resolution_level, keep):
+def _track_modify(klass, name, detail, keep, trace):
+    """
+    Modify settings of a tracked class
+    """
+    _observers[klass].modify(name, detail, keep, trace)
+
+def _inject_constructor(klass, f, name, resolution_level, keep, trace):
     """
     Modifying Methods in Place - after the recipe 15.7 in the Python
     Cookbook by Ken Seehof. The original constructors may be restored later.
@@ -96,28 +123,28 @@ def _inject_constructor(klass, f, name, resolution_level, keep):
     # constructor and the curried arguments of the injected constructor.
     # Therefore, the additional arguments have 'magic' names to make it less
     # likely that an argument name clash occurs.
-    _constructors[klass] = ki
+    _observers[klass] = _ClassObserver(ki, name, resolution_level, keep, trace)
     klass.__init__ = new.instancemethod(
-        lambda *args, **kwds: f(ki, name, resolution_level, keep, *args, **kwds), None, klass)
+        lambda *args, **kwds: f(_observers[klass], *args, **kwds), None, klass)
 
 def _restore_constructor(klass):
     """
     Restore the original constructor, lose track of class.
     """
-    klass.__init__ = _constructors[klass]
-    del _constructors[klass]
+    klass.__init__ = _observers[klass].init
+    del _observers[klass]
 
 
-def _tracker(__init__, __name__, __resolution_level__, __keep__, self, *args, **kwds):
+def _tracker(_observer_, self, *args, **kwds):
     """
     Injected constructor for tracked classes.
     Call the actual constructor of the object and track the object.
     Attach to the object before calling the constructor to track the object with
     the parameters of the most specialized class.
     """
-    track_object(self, name=__name__, resolution_level=__resolution_level__,
-        keep=__keep__)
-    __init__(self, *args, **kwds)
+    track_object(self, name=_observer_.name, resolution_level=_observer_.detail,
+        keep=_observer_.keep, trace=_observer_.trace)
+    _observer_.init(self, *args, **kwds)
 
 def _trunc(s, max, left=0):
     """
@@ -141,7 +168,7 @@ class TrackedObject(object):
     attached to monitor the object without preventing its deletion.
     """
 
-    def __init__(self, instance, resolution_level=0):
+    def __init__(self, instance, resolution_level=0, trace=0):
         """
         Create a weak reference for 'instance' to observe an object but which
         won't prevent its deletion (which is monitored by the finalize
@@ -153,6 +180,9 @@ class TrackedObject(object):
         self.birth = time.time()
         self.death = None
         self._resolution_level = resolution_level
+
+        if trace:
+            self._save_trace()
 
         #initial_size = SCons.asizeof.basicsize(instance)
         initial_size = SCons.asizeof.basicsize(instance) or 0
@@ -173,6 +203,20 @@ class TrackedObject(object):
                     _pp(r.size),int(r.size*100.0/total), level))
                 self._print_refs(file, r.refs, total, prefix=prefix+'  ', level=level+1)
 
+    def _save_trace(self):
+        """
+        Save current stack trace as formatted string.
+        """
+        st = inspect.stack()
+        try:
+            self.trace = []
+            for f in st[5:]: # eliminate our own overhead
+                for l in f[4]:
+                    self.trace.insert(0, '    '+l.strip()+'\n')
+                self.trace.insert(0, '  %s:%d in %s\n' % (f[1], f[2], f[3]))
+        finally:
+            del st
+
     def print_text(self, file, full=0):
         """
         Print the gathered information in human-readable format to the specified
@@ -186,6 +230,11 @@ class TrackedObject(object):
                 repr = str(obj)
                 file.write('%-32s 0x%08x %-35s\n' % (
                     _trunc(self.name, 32, left=1), id(obj), _trunc(repr, 35)))
+            try:
+                for line in self.trace:
+                    file.write(line)
+            except AttributeError:
+                pass
             for (ts, size) in self.footprint:
                 file.write('  %-30s %s\n' % (_get_timestamp(ts), _pp(size.size)))
                 self._print_refs(file, size.refs, size.size)                    
@@ -271,7 +320,7 @@ def track_change(instance, resolution_level=0):
     to.set_resolution_level(resolution_level)
 
 
-def track_object(instance, name=None, resolution_level=0, keep=0):
+def track_object(instance, name=None, resolution_level=0, keep=0, trace=0):
     """
     Track object 'instance' and sample size and lifetime information.
     Not all objects can be tracked; trackable objects are class instances and
@@ -294,7 +343,7 @@ def track_object(instance, name=None, resolution_level=0, keep=0):
         tracked_objects[id(instance)].ref() is not None:
         return
 
-    to = TrackedObject(instance, resolution_level=resolution_level)
+    to = TrackedObject(instance, resolution_level=resolution_level, trace=trace)
 
     if name is None:
         name = instance.__class__.__name__
@@ -309,17 +358,18 @@ def track_object(instance, name=None, resolution_level=0, keep=0):
         _keepalive.append(instance)
 
 
-def track_class(cls, name=None, resolution_level=0, keep=0, force=0):
+def track_class(cls, name=None, resolution_level=0, keep=0, trace=0):
     """
     Track all objects of the class 'cls'. Objects of that type that already
-    exist are _not_ tracked.
+    exist are _not_ tracked. If track_class is called for a class already
+    tracked, the tracking parameters are modified.
     A constructor is injected to begin instance tracking on creation
     of the object. The constructor calls 'track_object' internally.
     """
-    if force and _is_tracked(cls):
-        detach_class(cls)
-
-    _inject_constructor(cls, _tracker, name, resolution_level, keep)
+    if _is_tracked(cls):
+        _track_modify(cls, name, resolution_level, keep, trace)
+    else:
+        _inject_constructor(cls, _tracker, name, resolution_level, keep, trace)
 
 
 def detach_class(klass):
@@ -334,7 +384,7 @@ def detach_all_classes():
     """
     Detach from all tracked classes.
     """
-    for klass in _constructors.keys():
+    for klass in _observers.keys():
         detach_class(klass) 
 
 
@@ -452,7 +502,13 @@ def print_stats(file=sys.stdout, full=0):
         sum = 0
         dead = 0
         alive = 0
-        for to in tracked_index[classname]:
+        sorted_index = tracked_index[classname]
+        sortsize = lambda i, j: (i.get_size_at_time(tmax) > \
+            j.get_size_at_time(tmax)) and -1 or (i.get_size_at_time(tmax) < \
+            j.get_size_at_time(tmax)) and 1 or 0
+        sorted_index.sort(sortsize)
+        file.write('%s:\n' % classname)
+        for to in sorted_index:
             sum += to.get_size_at_time(tmax)
             to.print_text(file, full=1)
             if to.ref() is not None:

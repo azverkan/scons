@@ -263,21 +263,16 @@ class TrackClassTestCase(unittest.TestCase):
 
         self.assertRaises(KeyError, detach_class, Foo)
 
-    def test_force(self):
-        """Test forceful reregistering.
+    def test_change_name(self):
+        """Test modifying name.
         """
         track_class(Foo, name='Foobar')
-        track_class(Foo, name='Baz') # ignored
+        track_class(Foo, name='Baz')
         foo = Foo()
 
-        assert 'Foobar' in tracked_index
-        assert 'Baz' not in tracked_index
-        assert tracked_index['Foobar'][0].ref() == foo
-
-        track_class(Foo, name='Baz', force=1)
-        fob = Foo()
+        assert 'Foobar' not in tracked_index
         assert 'Baz' in tracked_index
-        assert tracked_index['Baz'][0].ref() == fob
+        assert tracked_index['Baz'][0].ref() == foo
 
 
 if __name__ == "__main__":

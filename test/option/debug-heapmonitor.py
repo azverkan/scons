@@ -56,6 +56,7 @@ pstartsum = re.compile(r'-* SUMMARY -*')
 pendsum = re.compile(r'-{70,79}')
 
 pinst = re.compile(r'[\w,.]{1,32} ')
+pclas = re.compile(r'[\w,.]+:')
 pts = re.compile(r'  \d\d:\d\d:\d\d[.]\d\d +(%s|finalize)' % resz)
 psum = re.compile(r'[\w,.]* +\d+ Alive +\d+ Free +%s' % resz)
 
@@ -72,7 +73,7 @@ for l in lines:
             phase = phase_inst
     elif phase == phase_inst:
         if pstartsum.match(l) is not None:
-            phase = phase_sum
+            phase = phase_sum 
         elif pinst.match(l) is not None:
             if numts == 0:
                 test.fail_test('Instance without size information')
@@ -80,6 +81,8 @@ for l in lines:
             numinst += 1
         elif pts.match(l) is not None:
             numts += 1
+        elif pclas.match(l) is not None:
+            pass
         else:
             test.fail_test('Unexpected output')
     elif phase == phase_sum:
