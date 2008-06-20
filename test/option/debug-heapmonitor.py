@@ -25,7 +25,7 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Test that the --debug=memory option works.
+Test that the --debug=heapmonitor option works.
 """
 
 import TestSCons
@@ -37,10 +37,12 @@ import time
 test = TestSCons.TestSCons()
 
 test.write('SConstruct', """
+import SCons.Heapmonitor
 def cat(target, source, env):
     open(str(target[0]), 'wb').write(open(str(source[0]), 'rb').read())
 env = Environment(BUILDERS={'Cat':Builder(action=Action(cat))})
 env.Cat('file.out', 'file.in')
+SCons.Heapmonitor.create_snapshot('Test')
 """)
 
 test.write('file.in', "file.in\n")
@@ -58,7 +60,8 @@ pendsum = re.compile(r'-{70,79}')
 pinst = re.compile(r'[\w,.]{1,32} ')
 pclas = re.compile(r'[\w,.]+:')
 pts = re.compile(r'  \d\d:\d\d:\d\d[.]\d\d +(%s|finalize)' % resz)
-psum = re.compile(r'[\w,.]* +\d+ Alive +\d+ Free +%s' % resz)
+psumhdr = re.compile(r'Test +active %s average +pct' % resz)
+psumnew = re.compile(r' +[\w,.]+ +\d+%s%s\d+%%' % (resz, resz))
 
 numclasses = 0
 numts = 1
@@ -88,8 +91,11 @@ for l in lines:
     elif phase == phase_sum:
         if pendsum.match(l) is not None:
             break
-        test.fail_test(psum.match(l) is None)
-        numclasses += 1
+        elif psumnew.match(l) is not None:
+            numclasses += 1
+        else:
+            print l
+            test.fail_test(psumhdr.match(l) is None)
 
 test.fail_test(numinst == 0)
 test.fail_test(numclasses == 0)

@@ -242,6 +242,7 @@ class TrackedObject(object):
                 file.write('  %-30s finalize\n' % _get_timestamp(ts))
         else:
             # TODO Print size for largest snapshot (get_size_at_time)
+            # Unused ATM: Maybe drop this type of reporting
             size = self.get_max_size()
             if obj is not None:
                 file.write('%-64s %-14s\n' % (_trunc(repr(obj), 64), _pp(size)))
@@ -256,12 +257,9 @@ class TrackedObject(object):
         objects.
         """
         obj = self.ref()
-        self.footprint.append( (ts, sizer.asized(obj,
-            detail=self._resolution_level)) )
-
-        #s = sizer.asizeof(obj) # XXX
-        #self.footprint.append( (time.time(), (s, s, [])) ) # XXX
-
+        self.footprint.append( 
+            (ts, sizer.asized(obj, detail=self._resolution_level)) 
+        )
 
     def get_max_size(self):
         """
@@ -362,7 +360,8 @@ def track_class(cls, name=None, resolution_level=0, keep=0, trace=0):
     """
     Track all objects of the class 'cls'. Objects of that type that already
     exist are _not_ tracked. If track_class is called for a class already
-    tracked, the tracking parameters are modified.
+    tracked, the tracking parameters are modified. Instantiation traces can be
+    generated with trace=1. 
     A constructor is injected to begin instance tracking on creation
     of the object. The constructor calls 'track_object' internally.
     """
@@ -435,12 +434,17 @@ def create_snapshot(description=''):
 
     fp.timestamp = ts
     fp.tracked_total = sizer.total
-    fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
+    if fp.tracked_total:
+        fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
+    else:
+        fp.asizeof_total = 0
     fp.system_total = SCons.Debug.memory()
     fp.desc = str(description)
 
-    # TODO Compute overhead of all structures, exclude tracked objects(!)
-    # overhead = sizer.asizeof(self) # compute actual profiling overhead
+    # Compute overhead of all structures, use sizer to exclude tracked objects(!)
+    if fp.tracked_total:
+        fp.overhead = sizer.asizeof(tracked_index, tracked_objects, footprint)
+        fp.asizeof_total -= fp.overhead
 
     footprint.append(fp)
 
@@ -484,8 +488,6 @@ def print_stats(file=sys.stdout, full=0):
     Write tracked objects by class to stdout.
     """
 
-    pat = '%-35s %8d Alive  %8d Free    %s\n'
-
     # Identify the snapshot that tracked the largest amount of memory.
     tmax = None
     maxsize = 0
@@ -496,37 +498,45 @@ def print_stats(file=sys.stdout, full=0):
     classlist = tracked_index.keys()
     classlist.sort()
     summary = []
+
+    # Emit per-instance data
     for classname in classlist:
         if full:
             file.write('\n%s:\n' % classname)
         sum = 0
-        dead = 0
-        alive = 0
         sorted_index = tracked_index[classname]
-        sortsize = lambda i, j: (i.get_size_at_time(tmax) > \
-            j.get_size_at_time(tmax)) and -1 or (i.get_size_at_time(tmax) < \
-            j.get_size_at_time(tmax)) and 1 or 0
+        sortsize = lambda i, j: \
+            (i.get_size_at_time(tmax) > j.get_size_at_time(tmax)) and -1 or \
+            (i.get_size_at_time(tmax) < j.get_size_at_time(tmax)) and 1 or 0
         sorted_index.sort(sortsize)
         file.write('%s:\n' % classname)
         for to in sorted_index:
-            sum += to.get_size_at_time(tmax)
             to.print_text(file, full=1)
-            if to.ref() is not None:
-                alive += 1
-            else:
-                dead += 1
-        summary.append(pat % (_trunc(classname,35),alive,dead,_pp(sum)))
 
-
-    # TODO The summary is a bit misleading. The summed size for each type is
-    # computed for the largest snapshot. The alive and free counts correspond to
-    # the time this routine is called. Better would be to emit per-snapshot
-    # instance statistics.
+    # Emit class summaries for each snapshot
     file.write('---- SUMMARY '+'-'*66+'\n')
-    for line in summary:
-        file.write(line)
+    for fp in footprint:
+        file.write('%-35s %11s %12s %12s %5s\n' % \
+            (_trunc(fp.desc, 35), 'active', _pp(fp.asizeof_total), 
+             'average', 'pct'))
+        for classname in classlist:
+            sum = 0
+            active = 0
+            for to in tracked_index[classname]:
+                sum += to.get_size_at_time(fp.timestamp)
+                if to.ref() is not None:
+                    active += 1
+            try:
+                pct = sum * 100 / fp.asizeof_total
+            except ZeroDivisionError:
+                pct = 0
+            try:
+                avg = sum / active
+            except ZeroDivisionError:
+                avg = 0
+            file.write('  %-33s %11d %12s %12s %4d%%\n' % \
+                (_trunc(classname, 33), active, _pp(sum), _pp(avg), pct))
     file.write('-'*79+'\n')
-    file.write('\n')
 
 def print_snapshots(file=sys.stdout):
     """

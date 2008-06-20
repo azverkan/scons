@@ -60,7 +60,9 @@
 
    The leng(th) and (flat) size of mutable sequence objects as
    dicts, lists, sets, etc. includes an estimate for the over-
-   allocation of the items.
+   allocation of the items.  Even with the estimate the size may
+   still be smaller than the actual, allocated size, especially
+   for the __dict__ attribute of a class instance.
 
 
    The basic and item sizes are obtained from the __basicsize__
@@ -102,8 +104,8 @@
    These definitions and other assumptions are rather arbitrary
    and may need corrections or adjustments.
 
-   Tested with Python 2.2.3, 2.3.4, 2.4.4, 2.5.1, 2.5.2, 2.6a3 or
-   3.0a5 on CentOS 4.6, SuSE 9.3, MacOS X 10.4.11 Tiger (Intel)
+   Tested with Python 2.2.3, 2.3.4, 2.4.4, 2.5.1, 2.5.2, 2.6b1 or
+   3.0b1 on CentOS 4.6, SuSE 9.3, MacOS X 10.4.11 Tiger (Intel)
    and Panther 10.3.9 (PPC), Solaris 10 and Windows XP all 32-bit
    Python and on RHEL 3u7 and Solaris 10 both 64-bit Python.
 
@@ -127,7 +129,7 @@ from sys        import modules, getrecursionlimit, stdout
 import types    as     Types
 import weakref  as     Weakref
 
-__version__ = '3.33 (June 17, 2008)'
+__version__ = '3.36 (June 19, 2008)'
 __all__     = ['adict', 'asized', 'asizeof', 'asizesof',
                'Asized', 'Asizer',  # classes
                'basicsize', 'flatsize', 'itemsize', 'leng', 'refs']
@@ -473,11 +475,6 @@ def _len(obj):
     except TypeError:  # no len()
         return 0
 
-def _len1(obj):
-    '''Length of str and unicode.
-    '''
-    return len(obj) + 1  # XXX sentinel
-
 def _len_array(obj):
     '''Array length in bytes.
     '''
@@ -540,9 +537,9 @@ def _len_struct(obj):
     except AttributeError:
         return 0
 
-_all_lengs = (None, _len,         _len1,      _len_array,
-                    _len_dict,    _len_int,   _len_module,
-                    _len_mutable, _len_slice, _len_struct)
+_all_lengs = (None, _len,       _len_array,  _len_dict,
+                    _len_int,   _len_module, _len_mutable,
+                    _len_slice, _len_struct)
 
 
 # more private functions and classes
@@ -678,13 +675,14 @@ _all_kinds = (_kind_static, _kind_dynamic, _kind_derived, _kind_ignored, _kind_i
 class _Typedef(object):
     '''Internal type definition class.
     '''
-    base = 0     # basic size in bytes
-    item = 0     # item size in bytes
-    leng = None  # or _len_() function
-    refs = None  # or _refs() function
-    both = None  # both data and code if True, code only if False
-    kind = None  # or _kind_ value
-    type = None  # original type
+    __slots__ = {
+        'base': 0,     # basic size in bytes
+        'item': 0,     # item size in bytes
+        'leng': None,  # or _len_() function
+        'refs': None,  # or _refs() function
+        'both': None,  # both data and code if True, code only if False
+        'kind': None,  # or _kind_ value
+        'type': None}  # original type
 
     def __init__(self, **kwds):
         self.reset(**kwds)
@@ -757,11 +755,11 @@ class _Typedef(object):
         if leng in _all_lengs:  # XXX or _callable(leng)
             self.leng = leng
         else:
-            raise ValueError('asizeof _len_() invalid: %r' % leng)
+            raise ValueError('asizeof leng() invalid: %r' % leng)
         if refs in _all_refs:  # XXX or _callable(refs)
             self.refs = refs
         else:
-            raise ValueError('asizeof _refs() invalid: %r' % refs)
+            raise ValueError('asizeof refs() invalid: %r' % refs)
         if both in (False, True):
             self.both = both
         else:
@@ -808,7 +806,6 @@ def _typedef_code(t, refs=None, kind=_kind_static):
     '''Add new typedef for code only.
     '''
     return _typedef(t, item=0, refs=refs, both=False, kind=kind)
-
 
  # static typedefs for data and code types
 _typedef_both(complex)
@@ -871,8 +868,8 @@ try:
       _typedef_both(bytes, item=1, leng=_len)  # len in bytes #PYCHOK bytes new in 3.0
 except NameError:  # missing
     pass
-try:  # XXX like bytes + sentinel?
-    _typedef_both(str8,  item=1, leng=_len1,)  # len in bytes #PYCHOK str8 new in 3.0
+try:  # XXX like bytes
+    _typedef_both(str8, item=1, leng=_len)  # len in bytes #PYCHOK str8 new in 3.0
 except NameError:  # missing
     pass
 
@@ -957,10 +954,10 @@ except AttributeError:  # missing
     pass
 
 try:
-    _typedef_both(unicode, leng=_len1, item=_sizeof_Cshort)  # XXX sizeof(PY_UNICODE_TYPE)?
-    _typedef_both(str,     leng=_len1, item=1)  # 1-byte char
+    _typedef_both(unicode, leng=_len, item=_sizeof_Cshort)  # XXX sizeof(PY_UNICODE_TYPE)?
+    _typedef_both(str,     leng=_len, item=1)  # 1-byte char
 except NameError:  # str is unicode
-    _typedef_both(str,     leng=_len1, item=2)  # XXX 2-byte char?
+    _typedef_both(str,     leng=_len, item=2)  # XXX 2-byte char?
 
 try:  # <type 'KeyedRef'>
     _typedef_both(Weakref.KeyedRef, refs=_weak_refs)
@@ -1151,7 +1148,8 @@ class Asizer(object):
                     s = v.base  # basic size
                     if v.leng and v.item > 0:  # include items
                         s += v.item * v.leng(obj)
-                    if _getsizeof:
+                     # _getsizeof only for non-ignored typedefs
+                    if _getsizeof and v.kind is not _kind_ignored:
                         try:  # sys.getsizeof()
                             t = _getsizeof(obj)
                             if s < t:
@@ -1907,4 +1905,3 @@ if __name__ == '__main__':
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 #---------------------------------------------------------------------
-
