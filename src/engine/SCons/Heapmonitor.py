@@ -365,6 +365,11 @@ def track_class(cls, name=None, resolution_level=0, keep=0, trace=0):
     A constructor is injected to begin instance tracking on creation
     of the object. The constructor calls 'track_object' internally.
     """
+    if name is None:
+        try:
+            name = cls.__module__ + '.' + cls.__name__
+        except AttributeError:
+            pass
     if _is_tracked(cls):
         _track_modify(cls, name, resolution_level, keep, trace)
     else:
@@ -542,8 +547,8 @@ def print_snapshots(file=sys.stdout):
     """
     Print snapshot stats.
     """
-    file.write('%-32s %15s (%11s) %15s\n' % ('SNAPSHOT LABEL', 'VIRTUAL TOTAL',
-        'SIZEABLE', 'TRACKED TOTAL'))
+    file.write('%-32s %15s (%11s) %15s\n' % ('Snapshot Label', 'Virtual Total',
+        'Measurable', 'Tracked Total'))
     for fp in footprint:
         label = fp.desc
         if label == '':

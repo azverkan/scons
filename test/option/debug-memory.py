@@ -63,7 +63,7 @@ lines = string.split(test.stdout(), '\n')
 
 resz = r' *\d+[.]?\d* +(B|KB|MB|GB|TB) *'
 
-test.fail_test(re.match(r'SNAPSHOT LABEL +VIRTUAL TOTAL +[(] *SIZEABLE[)] +TRACKED TOTAL', lines[-6]) is None)
+test.fail_test(re.match(r'Snapshot Label +Virtual Total +[(] *Measurable[)] +Tracked Total', lines[-6]) is None)
 test.fail_test(re.match(r'before reading SConscript files: %s[(]%s[)]%s' % (resz,resz,resz), lines[-5]) is None)
 test.fail_test(re.match(r'after reading SConscript files: %s[(]%s[)]%s' % (resz,resz,resz), lines[-4]) is None)
 test.fail_test(re.match(r'before building targets: %s[(]%s[)]%s' % (resz,resz,resz), lines[-3]) is None)
@@ -73,7 +73,7 @@ test.run(arguments = '-h --debug=memory')
 
 lines = string.split(test.stdout(), '\n')
 
-test.fail_test(re.match(r'SNAPSHOT LABEL +VIRTUAL TOTAL +[(] *SIZEABLE[)] +TRACKED TOTAL', lines[-4]) is None)
+test.fail_test(re.match(r'Snapshot Label +Virtual Total +[(] *Measurable[)] +Tracked Total', lines[-4]) is None)
 test.fail_test(re.match(r'before reading SConscript files: %s[(]%s[)]%s' % (resz,resz,resz), lines[-3]) is None)
 test.fail_test(re.match(r'after reading SConscript files: %s[(]%s[)]%s' % (resz,resz,resz), lines[-2]) is None)
 
