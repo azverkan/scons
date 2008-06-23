@@ -62,26 +62,6 @@ def Stripper(dependency, target, prev_ni):
     return SIGS_WHOLE
 
 
-
-def count_metachars(txt, i):
-    """Return true if backslashes are not escaping the quote sign
-    (i.e. the quote sign denotes beginning/end of a string).
-    False otherwise.
-    
-    Example: escaped quote sign: \" => returns false
-             escaped backslash: \\" => returns true"""
-
-    metas_index = 0
-    i -= 1
-    while i > 0:
-       if txt[i] == '\\':
-           metas_index += 1
-       else:
-           break
-       i -= 1
-    return not metas_index % 2
-
-
 def Code(filename, comment_char = '#'):
     """Strip the source code from the file and return comments.
     
@@ -90,7 +70,6 @@ def Code(filename, comment_char = '#'):
     as a comment), and return comments.
     
     Default for 'comment_char' is '#'."""
-
 
     try:
         f = open(filename, 'rb')
@@ -105,14 +84,22 @@ def Code(filename, comment_char = '#'):
     buf = []
     single_quot = False
     double_quot = False
+    metachars = 0
     while i < len_max:
-        # turn the quoting on/off
-        if txt[i] == '\'' and count_metachars(txt, i):
+        quoting = single_quot or double_quot
+        # slash within a quote
+        if quoting and txt[i] == '\\':
+            metachars += 1
+        # escaped quote
+        elif quoting and txt[i] == ('"' or '\'') and metachars % 2:
+            metachars = 0
+        # opening/closing quote - turn the quoting on/off
+        elif txt[i] == '\'' and not metachars % 2:
             if single_quot:
                 single_quot = False
             else:
                 single_quot = True
-        elif txt[i] == '"' and count_metachars(txt, i):
+        elif txt[i] == '"' and not metachars % 2:
             if double_quot:
                 double_quot = False
             else:
@@ -124,11 +111,9 @@ def Code(filename, comment_char = '#'):
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
                 i += 1
-
         i += 1
 
     return ''.join(buf)
-
 
 
 def Comments(filename, comment_char = '#'):
@@ -153,14 +138,22 @@ def Comments(filename, comment_char = '#'):
     buf = []
     single_quot = False
     double_quot = False
+    metachars = 0
     while i < len_max:
-        # turn the quoting on/off
-        if txt[i] == '\'' and count_metachars(txt, i):
+        quoting = single_quot or double_quot
+        # slash within a quote
+        if quoting and txt[i] == '\\':
+            metachars += 1
+        # escaped quote
+        elif quoting and txt[i] == ('"' or '\'') and metachars % 2:
+            metachars = 0
+        # opening/closing quote - turn the quoting on/off
+        elif txt[i] == '\'' and not metachars % 2:
             if single_quot:
                 single_quot = False
             else:
                 single_quot = True
-        elif txt[i] == '"' and count_metachars(txt, i):
+        elif txt[i] == '"' and not metachars % 2:
             if double_quot:
                 double_quot = False
             else:
@@ -219,7 +212,6 @@ def CCode(filename):
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
                 i += 1
-            metachars = 0
         # add '/* */' comment to the buffer
         elif txt[i] == '/' and txt[i+1] == '*' and not quot:
             while i+1 < len_max:
@@ -229,7 +221,6 @@ def CCode(filename):
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
                 i += 1
-            metachars = 0
         i+=1
     return ''.join(buf)
 
@@ -253,22 +244,40 @@ def CComments(filename):
     i = 0
     len_max = len(txt)
     buf = []
-    quot = False
-    metachar = 0
     while i < len_max:
-        # turn the quoting on/off
-        if txt[i] == '"' and count_metachars(txt, i):
-            if quot:
-                quot = False
-            else:
-                quot = True
+        # add quote to the buffer
+        if txt[i] == '"':
+            metachars = 0
+            buf.append(txt[i])
+            i += 1
+            try:
+                while i < len_max:
+                    if txt[i] == '\\':
+                        metachars += 1
+                        buf.append(txt[i])
+                        i += 1
+                        continue
+                    elif txt[i] == '"':
+                        if metachars % 2:
+                            buf.append(txt[i])
+                            i += 1
+                            metachars = 0
+                            continue
+                        buf.append(txt[i])
+                        i += 1
+                        break
+                    buf.append(txt[i])
+                    i += 1
+                    metachars = 0
+            except IndexError:
+                continue
 
         # strip '//' comment
-        if txt[i] == '/' and txt[i+1] == '/' and not quot:
+        if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
                 i += 1
         # strip '/* */' comment
-        elif txt[i] == '/' and txt[i+1] == '*' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '*':
             while i+1 < len_max:
                 if txt[i] == '*' and txt[i+1] == '/':
                     i += 1
@@ -276,7 +285,7 @@ def CComments(filename):
                 i += 1
         # add the code to the buffer
         else:
-            if quot or not (txt[i] == ' ' or txt[i] == '\n'):
+            if not (txt[i] == ' ' or txt[i] == '\n'):
                 buf.append(txt[i])
 
         i += 1
@@ -368,29 +377,47 @@ def DComments(filename):
     i = 0
     len_max = len(txt)
     buf = []
-    quot = False
-    embed = False
     while i < len_max:
-        # turn the quoting on/off
-        if txt[i] == '"' and count_metachars(txt, i):
-            if quot:
-                quot = False
-            else:
-                quot = True
+        # add quote to the buffer
+        if txt[i] == '"':
+            metachars = 0
+            buf.append(txt[i])
+            i += 1
+            try:
+                while i < len_max:
+                    if txt[i] == '\\':
+                        metachars += 1
+                        buf.append(txt[i])
+                        i += 1
+                        continue
+                    elif txt[i] == '"':
+                        if metachars % 2:
+                            buf.append(txt[i])
+                            i += 1
+                            metachars = 0
+                            continue
+                        buf.append(txt[i])
+                        i += 1
+                        break
+                    buf.append(txt[i])
+                    i += 1
+                    metachars = 0
+            except IndexError:
+                continue
 
         # strip /+ +/ comments
-        if txt[i] == '/' and txt[i+1] == '+' and not quot:
+        if txt[i] == '/' and txt[i+1] == '+':
             while i < len_max:
                 if txt[i] == '+' and txt[i+1] == '/':
                     i += 2
                     break
                 i += 1
         # strip // comments
-        elif txt[i] == '/' and txt[i+1] == '/' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
                 i += 1
         # strip /* */ comments
-        elif txt[i] == '/' and txt[i+1] == '*' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '*':
             while i+1 < len_max:
                 if txt[i] == '*' and txt[i+1] == '/':
                     i += 1
@@ -398,9 +425,8 @@ def DComments(filename):
                 i += 1
         # add to buffer
         else:
-            if quot or not (txt[i] == ' ' or txt[i] == '\n'):
+            if not (txt[i] == ' ' or txt[i] == '\n'):
                 buf.append(txt[i])
-
         i += 1
 
     return ''.join(buf)
