@@ -62,6 +62,39 @@ def Stripper(dependency, target, prev_ni):
     return SIGS_WHOLE
 
 
+
+def add_quote_to_buf(txt, i, len_max, quot='"'):
+    metachars = 0
+    buf = []
+    buf.append(txt[i])
+    i += 1
+    try:
+        while i < len_max:
+            if txt[i] == '\\':
+                metachars += 1
+                buf.append(txt[i])
+                i += 1
+                continue
+            elif txt[i] == quot: #'"':
+                if metachars % 2:
+                    buf.append(txt[i])
+                    i += 1
+                    metachars = 0
+                    continue
+                buf.append(txt[i])
+                i += 1
+                break
+            buf.append(txt[i])
+            i += 1
+            metachars = 0
+    except IndexError:
+        return buf, i
+    return buf, i
+
+
+
+
+
 def Code(filename, comment_char = '#'):
     """Strip the source code from the file and return comments.
     
@@ -136,31 +169,16 @@ def Comments(filename, comment_char = '#'):
     i = 0
     len_max = len(txt)
     buf = []
-    single_quot = False
-    double_quot = False
-    metachars = 0
     while i < len_max:
-        quoting = single_quot or double_quot
-        # slash within a quote
-        if quoting and txt[i] == '\\':
-            metachars += 1
-        # escaped quote
-        elif quoting and txt[i] == ('"' or '\'') and metachars % 2:
-            metachars = 0
-        # opening/closing quote - turn the quoting on/off
-        elif txt[i] == '\'' and not metachars % 2:
-            if single_quot:
-                single_quot = False
-            else:
-                single_quot = True
-        elif txt[i] == '"' and not metachars % 2:
-            if double_quot:
-                double_quot = False
-            else:
-                double_quot = True
+        if txt[i] == '"':
+            new_buf, i = add_quote_to_buf(txt, i, len_max)
+            buf += new_buf
+        elif txt[i] == '\'':
+            new_buf, i = add_quote_to_buf(txt, i, len_max, '\'')
+            buf += new_buf
 
         # strip the comment
-        if txt[i] == comment_char and not (single_quot or double_quot):
+        if txt[i] == comment_char:# and not (single_quot or double_quot):
             while i < len_max and txt[i] != '\n':
                 i += 1
         # add to the buffer

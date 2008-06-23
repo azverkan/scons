@@ -123,7 +123,7 @@ import Comments
 print r"%s" % (Comments.Comments('pycomments.py'))
 """)
 
-test.run(chdir = 'py-one', arguments = '-q -Q', stdout = r"""print"#!notcomment\\\\\""print'#!notcomment'print'"#!notcomment"'print"'#!notcomment'"
+test.run(chdir = 'py-one', arguments = '-q -Q', stdout = r"""print"#! not comment\\\\\""print'#! not comment'print'"#! not comment"'print"'#! not comment'"
 """)
 
 
@@ -166,7 +166,7 @@ import Comments
 print r"%s" % (Comments.Comments('fcomments.f90', '!'))
 """)
 
-test.run(chdir = 'fortran-one', arguments = '-q -Q', stdout = r"""programhelloprint*,"!notcomment"print*,'!notcomment'print*,'"!notcomment"'print*,"'!notcomment'"endprogramhello
+test.run(chdir = 'fortran-one', arguments = '-q -Q', stdout = r"""programhelloprint*,"! not comment"print*,'! not comment'print*,'"! not comment"'print*,"'! not comment'"endprogramhello
 """)
 
 
