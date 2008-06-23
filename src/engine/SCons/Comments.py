@@ -63,7 +63,21 @@ def Stripper(dependency, target, prev_ni):
 
 
 
-def add_quote_to_buf(txt, i, len_max, quot='"'):
+def quoting_to_buf(txt, i, len_max, quot='"'):
+    """Extract quoted string from the buffer.
+
+    Takes four arguments:
+    'txt' - file contents (as a string or list of characters)
+    'i' - current position in the file
+    'len_max' - length of the string/list 'txt'
+    'quot' - quoting sign (default: '"')
+
+    Returns a tuple: quoted string as a list of characters
+    and the current position in the buffer (first sign after
+    the quoted string).
+
+    This function is escaped-quotes sensitive."""
+
     metachars = 0
     buf = []
     buf.append(txt[i])
@@ -75,7 +89,7 @@ def add_quote_to_buf(txt, i, len_max, quot='"'):
                 buf.append(txt[i])
                 i += 1
                 continue
-            elif txt[i] == quot: #'"':
+            elif txt[i] == quot:
                 if metachars % 2:
                     buf.append(txt[i])
                     i += 1
@@ -90,9 +104,6 @@ def add_quote_to_buf(txt, i, len_max, quot='"'):
     except IndexError:
         return buf, i
     return buf, i
-
-
-
 
 
 def Code(filename, comment_char = '#'):
@@ -115,31 +126,15 @@ def Code(filename, comment_char = '#'):
     i = 0
     len_max = len(txt)
     buf = []
-    single_quot = False
-    double_quot = False
-    metachars = 0
     while i < len_max:
-        quoting = single_quot or double_quot
-        # slash within a quote
-        if quoting and txt[i] == '\\':
-            metachars += 1
-        # escaped quote
-        elif quoting and txt[i] == ('"' or '\'') and metachars % 2:
-            metachars = 0
-        # opening/closing quote - turn the quoting on/off
-        elif txt[i] == '\'' and not metachars % 2:
-            if single_quot:
-                single_quot = False
-            else:
-                single_quot = True
-        elif txt[i] == '"' and not metachars % 2:
-            if double_quot:
-                double_quot = False
-            else:
-                double_quot = True
-
+        # omit double-quoted string
+        if txt[i] == '"':
+            i = quoting_to_buf(txt, i, len_max)[1]
+        # omit single-quoted string
+        elif txt[i] == '\'':
+            i = quoting_to_buf(txt, i, len_max, '\'')[1]
         # add the comment to the buffer
-        if txt[i] == comment_char and not (single_quot or double_quot):
+        elif txt[i] == comment_char:
             while i < len_max and txt[i] != '\n':
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
@@ -170,18 +165,19 @@ def Comments(filename, comment_char = '#'):
     len_max = len(txt)
     buf = []
     while i < len_max:
+        # add double-quoted string to the buffer
         if txt[i] == '"':
-            new_buf, i = add_quote_to_buf(txt, i, len_max)
-            buf += new_buf
+            new_buf, i = quoting_to_buf(txt, i, len_max)
+            buf.extend(new_buf)
+        # add single-quoted string to the buffer
         elif txt[i] == '\'':
-            new_buf, i = add_quote_to_buf(txt, i, len_max, '\'')
-            buf += new_buf
-
+            new_buf, i = quoting_to_buf(txt, i, len_max, '\'')
+            buf.extend(new_buf)
         # strip the comment
-        if txt[i] == comment_char:# and not (single_quot or double_quot):
+        if txt[i] == comment_char:
             while i < len_max and txt[i] != '\n':
                 i += 1
-        # add to the buffer
+        # add everything else to the buffer
         else:
             if not (txt[i] == ' ' or txt[i] == '\n'):
                 buf.append(txt[i])
@@ -263,33 +259,10 @@ def CComments(filename):
     len_max = len(txt)
     buf = []
     while i < len_max:
-        # add quote to the buffer
+        # add double-quoted string to the buffer
         if txt[i] == '"':
-            metachars = 0
-            buf.append(txt[i])
-            i += 1
-            try:
-                while i < len_max:
-                    if txt[i] == '\\':
-                        metachars += 1
-                        buf.append(txt[i])
-                        i += 1
-                        continue
-                    elif txt[i] == '"':
-                        if metachars % 2:
-                            buf.append(txt[i])
-                            i += 1
-                            metachars = 0
-                            continue
-                        buf.append(txt[i])
-                        i += 1
-                        break
-                    buf.append(txt[i])
-                    i += 1
-                    metachars = 0
-            except IndexError:
-                continue
-
+            new_buf, i = quoting_to_buf(txt, i, len_max)
+            buf.extend(new_buf)
         # strip '//' comment
         if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
@@ -305,7 +278,6 @@ def CComments(filename):
         else:
             if not (txt[i] == ' ' or txt[i] == '\n'):
                 buf.append(txt[i])
-
         i += 1
 
     return ''.join(buf)
@@ -396,33 +368,10 @@ def DComments(filename):
     len_max = len(txt)
     buf = []
     while i < len_max:
-        # add quote to the buffer
+        # add double-quoted string to the buffer
         if txt[i] == '"':
-            metachars = 0
-            buf.append(txt[i])
-            i += 1
-            try:
-                while i < len_max:
-                    if txt[i] == '\\':
-                        metachars += 1
-                        buf.append(txt[i])
-                        i += 1
-                        continue
-                    elif txt[i] == '"':
-                        if metachars % 2:
-                            buf.append(txt[i])
-                            i += 1
-                            metachars = 0
-                            continue
-                        buf.append(txt[i])
-                        i += 1
-                        break
-                    buf.append(txt[i])
-                    i += 1
-                    metachars = 0
-            except IndexError:
-                continue
-
+            new_buf, i = quoting_to_buf(txt, i, len_max)
+            buf.extend(new_buf)
         # strip /+ +/ comments
         if txt[i] == '/' and txt[i+1] == '+':
             while i < len_max:
