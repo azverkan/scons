@@ -205,29 +205,18 @@ def CCode(filename):
     i = 0
     len_max = len(txt)
     buf = []
-    quot = False
-    metachars = 0
     while i < len_max:
-        if quot and txt[i] == '\\':
-            metachars += 1
-        elif txt[i] != '"':
-            metachars = 0
-
-        # turn the quoting on/off
-        if txt[i] == '"' and not metachars % 2:
-            if quot:
-                quot = False
-            else:
-                quot = True
-
+        # omit double-quoted string
+        if txt[i] == '"':
+            i = quoting_to_buf(txt, i, len_max)[1]
         # add '//' comment to the buffer
-        if txt[i] == '/' and txt[i+1] == '/' and not quot:
+        if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
                 i += 1
         # add '/* */' comment to the buffer
-        elif txt[i] == '/' and txt[i+1] == '*' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '*':
             while i+1 < len_max:
                 if txt[i] == '*' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
@@ -302,30 +291,19 @@ def DCode(filename):
     i = 0
     len_max = len(txt)
     buf = []
-    quot = False
-    metachars = 0
     while i < len_max:
-        if quot and txt[i] == '\\':
-            metachars += 1
-        elif txt[i] != '"':
-            metachars = 0
-
-        # turn the quoting on/off
-        if txt[i] == '"' and not metachars % 2:
-            if quot:
-                quot = False
-            else:
-                quot = True
-
+        # omit double-quoted string
+        if txt[i] == '"':
+            i = quoting_to_buf(txt, i, len_max)[1]
         # add '//' comment to the buffer
-        if txt[i] == '/' and txt[i+1] == '/' and not quot:
+        if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
                 if not (txt[i] == ' ' or txt[i] == '\n'):
                     buf.append(txt[i])
                 i += 1
             metachars = 0
         # add '/* */' comment to the buffer
-        elif txt[i] == '/' and txt[i+1] == '*' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '*':
             while i+1 < len_max:
                 if txt[i] == '*' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
@@ -335,7 +313,7 @@ def DCode(filename):
                 i += 1
             metachars = 0
         # add '/+ +/' comment to the buffer
-        elif txt[i] == '/' and txt[i+1] == '+' and not quot:
+        elif txt[i] == '/' and txt[i+1] == '+':
             while i < len_max:
                 if txt[i] == '+' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
