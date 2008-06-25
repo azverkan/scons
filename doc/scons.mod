@@ -145,8 +145,10 @@
 -->
 
 <!ENTITY Add "<function>Add</function>">
+<!ENTITY AddMethod "<function>AddMethod</function>">
 <!ENTITY AddPostAction "<function>AddPostAction</function>">
 <!ENTITY AddPreAction "<function>AddPreAction</function>">
+<!ENTITY AddOption "<function>AddOption</function>">
 <!ENTITY AddOptions "<function>AddOptions</function>">
 <!ENTITY AddVariables "<function>AddVariables</function>">
 <!ENTITY Alias "<function>Alias</function>">
@@ -183,6 +185,7 @@
 <!ENTITY FindInstalledFiles "<function>FindInstalledFiles</function>">
 <!ENTITY Finish "<function>Finish</function>">
 <!ENTITY GenerateHelpText "<function>GenerateHelpText</function>">
+<!ENTITY GetBuildFailures "<function>GetBuildFailures</function>">
 <!ENTITY GetOption "<function>GetOption</function>">
 <!ENTITY Help "<function>Help</function>">
 <!ENTITY Ignore "<function>Ignore</function>">
@@ -222,6 +225,7 @@
 <!ENTITY PrependUnique "<function>PrependUnique</function>">
 <!ENTITY Replace "<function>Replace</function>">
 <!ENTITY Repository "<function>Repository</function>">
+<!ENTITY Requires "<function>Requires</function>">
 <!ENTITY Return "<function>Return</function>">
 <!ENTITY RuleSet "<function>RuleSet</function>">
 <!ENTITY Salt "<function>Salt</function>">
@@ -236,6 +240,8 @@
 <!ENTITY TargetSignatures "<function>TargetSignatures</function>">
 <!ENTITY Task "<function>Task</function>">
 <!ENTITY Touch "<function>Touch</function>">
+<!ENTITY UnknownOptions "<functions>UnknownOptions</functions>">
+<!ENTITY UnknownVariables "<functions>UnknownVariables</functions>">
 
 <!-- Environment methods -->
 <!ENTITY subst "<function>subst</function>">
@@ -323,6 +329,7 @@
 <!ENTITY exports "<varname>exports</varname>">
 <!ENTITY source "<varname>source</varname>">
 <!ENTITY target "<varname>target</varname>">
+<!ENTITY variables "<varname>variables</varname>">
 <!ENTITY variant_dir "<varname>variant_dir</varname>">
 
 
