@@ -176,6 +176,8 @@ class TrackedObject(object):
         (timestamp, size) tuples.
         """
         self.ref = weakref.ref(instance, self.finalize)
+        self.id = id(instance)
+        self.repr = ''
         self.name = instance.__class__
         self.birth = time.time()
         self.death = None
@@ -188,6 +190,16 @@ class TrackedObject(object):
         initial_size = SCons.asizeof.basicsize(instance) or 0
         so = SCons.asizeof.Asized(initial_size, initial_size)
         self.footprint = [(self.birth, so)]
+
+    def __getstate__(self):
+        """
+        Make the object serializable for dump_stats. 
+        Weakrefs cannot be serialized. Return all members but the weak reference
+        in a dictionary.
+        """
+        state = self.__dict__.copy()
+        del state['ref']
+        return state        
 
     def _print_refs(self, file, refs, total, prefix='    ', level=1, 
         minsize=0, minpct=0.1):
@@ -222,14 +234,13 @@ class TrackedObject(object):
         Print the gathered information in human-readable format to the specified
         file.
         """
-        obj  = self.ref()
         if full:
-            if obj is None:
-                file.write('%-32s (FREE)\n' % _trunc(self.name, 32, left=1))
+            if self.death:
+                file.write('%-32s ( free )   %-35s\n' % (
+                    _trunc(self.name, 32, left=1), _trunc(self.repr, 35)))
             else:
-                repr = str(obj)
                 file.write('%-32s 0x%08x %-35s\n' % (
-                    _trunc(self.name, 32, left=1), id(obj), _trunc(repr, 35)))
+                    _trunc(self.name, 32, left=1), self.id, _trunc(self.repr, 35)))
             try:
                 for line in self.trace:
                     file.write(line)
@@ -244,8 +255,8 @@ class TrackedObject(object):
             # TODO Print size for largest snapshot (get_size_at_time)
             # Unused ATM: Maybe drop this type of reporting
             size = self.get_max_size()
-            if obj is not None:
-                file.write('%-64s %-14s\n' % (_trunc(repr(obj), 64), _pp(size)))
+            if self.repr:
+                file.write('%-64s %-14s\n' % (_trunc(self.repr, 64), _pp(size)))
             else:
                 file.write('%-64s %-14s\n' % (_trunc(self.name, 64), _pp(size)))       
         
@@ -260,6 +271,8 @@ class TrackedObject(object):
         self.footprint.append( 
             (ts, sizer.asized(obj, detail=self._resolution_level)) 
         )
+        if obj is not None:
+            self.repr = _trunc(str(obj), 128)
 
     def get_max_size(self):
         """
@@ -488,6 +501,16 @@ def _get_timestamp(t):
 
     return "%02d:%02d:%05.2f" % (h, m, s)
 
+def dump_stats(fname):
+    """
+    Dump the logged data to a file.
+    """
+    import cPickle
+    log = open(fname, 'w')
+    cPickle.dump(tracked_index, log)
+    cPickle.dump(footprint, log)
+    log.close()
+
 def print_stats(file=sys.stdout, full=0):
     """
     Write tracked objects by class to stdout.
@@ -529,7 +552,8 @@ def print_stats(file=sys.stdout, full=0):
             active = 0
             for to in tracked_index[classname]:
                 sum += to.get_size_at_time(fp.timestamp)
-                if to.ref() is not None:
+                if to.birth < fp.timestamp and \
+                    (to.death is None or to.death > fp.timestamp):
                     active += 1
             try:
                 pct = sum * 100 / fp.asizeof_total
