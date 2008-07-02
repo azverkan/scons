@@ -45,7 +45,6 @@ import stat
 import string
 import sys
 import time
-import cStringIO
 
 import SCons.Action
 from SCons.Debug import logInstanceCreation
@@ -496,6 +495,8 @@ class EntryProxy(SCons.Util.Proxy):
             return attr
         else:
             return attr_function(self)
+
+
 
 class Base(SCons.Node.Node):
     """A generic class for file system entries.  This class is for
@@ -1041,8 +1042,8 @@ class FS(LocalFS):
         self.Top.tpath = '.'
         self._cwd = self.Top
 
-        DirNodeInfo.fs = self
-        FileNodeInfo.fs = self
+        DirNodeInfo.str_to_node = self.Entry_fast
+        FileNodeInfo.str_to_node = self.Entry_fast
     
     def set_SConstruct_dir(self, dir):
         self.SConstruct_dir = dir
@@ -1177,6 +1178,16 @@ class FS(LocalFS):
         """
         return self._lookup(name, directory, Entry, create)
 
+    _canonicalized_lookup_dict = {}
+
+    def Entry_fast(self, name):
+        try:
+            return self._canonicalized_lookup_dict[name]
+        except KeyError:
+            result = self.Entry(name)
+            self._canonicalized_lookup_dict[name] = result
+            return result
+
     def File(self, name, directory = None, create = 1):
         """Lookup or create a File node with the specified name.  If
         the name is a relative path (begins with ./, ../, or a file name),
@@ -1265,18 +1276,8 @@ class DirNodeInfo(SCons.Node.NodeInfoBase):
     # This should get reset by the FS initialization.
     current_version_id = 1
 
-    fs = None
-
-    def str_to_node(self, s):
-        top = self.fs.Top
-        root = top.root
-        if do_splitdrive:
-            drive, s = os.path.splitdrive(s)
-            if drive:
-                root = self.fs.get_root(drive)
-        if not os.path.isabs(s):
-            s = top.labspath + '/' + s
-        return root._lookup_abs(s, Entry)
+    # This should get replaced by the FS initialization.
+    str_to_node = None
 
 class DirBuildInfo(SCons.Node.BuildInfoBase):
     current_version_id = 1
@@ -2041,19 +2042,8 @@ class FileNodeInfo(SCons.Node.NodeInfoBase):
 
     field_list = ['csig', 'timestamp', 'size']
 
-    # This should get reset by the FS initialization.
-    fs = None
-
-    def str_to_node(self, s):
-        top = self.fs.Top
-        root = top.root
-        if do_splitdrive:
-            drive, s = os.path.splitdrive(s)
-            if drive:
-                root = self.fs.get_root(drive)
-        if not os.path.isabs(s):
-            s = top.labspath + '/' + s
-        return root._lookup_abs(s, Entry)
+    # This should get replaced by the FS initialization.
+    str_to_node = None
 
 class FileBuildInfo(SCons.Node.BuildInfoBase):
     current_version_id = 1
