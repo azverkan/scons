@@ -25,7 +25,9 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import unittest
 import TestCmd
+import tempfile
 
+from os import tempnam, remove
 from SCons.Heapmonitor import *
 
 class Foo:
@@ -114,6 +116,41 @@ class TrackObjectTestCase(unittest.TestCase):
 
         assert tracked_objects[idfoo].ref() is not None
         assert tracked_objects[idbar].ref() is None
+
+    def test_dump(self):
+        """Test serialization of log data.
+        """
+        foo = Foo()
+
+        track_object(foo, resolution_level=4)
+        create_snapshot('Footest')
+
+        f1 = tempfile.TemporaryFile()
+        print_stats(file=f1)
+
+        tmp = tempnam() # FIXME tempnam is deprecated
+        dump_stats(tmp)
+
+        clear()
+
+        stats = MemStats()
+        assert stats.tracked_index is None
+        assert stats.footprint is None
+        stats.load(tmp)
+        remove(tmp)
+        assert 'Foo' in stats.tracked_index
+
+        f2 = tempfile.TemporaryFile()
+        stats.print_stats(file=f2)
+
+        f1.seek(0)
+        f2.seek(0)
+
+        assert f1.read() == f2.read()
+
+        f1.close()
+        f2.close()
+
 
     def test_recurse(self):
         """Test recursive sizing and saving of referents.

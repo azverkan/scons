@@ -534,6 +534,14 @@ class HeapmonitorStats(Stats):
 
 heapmonitor_stats = HeapmonitorStats()
 
+class GarbageStats(Stats):
+    def do_append(self, label):
+        pass
+    def do_print(self):
+        SCons.Heapmonitor.print_garbage_stats(self.outfp)
+
+garbage_stats = GarbageStats()
+
 # utility functions
 
 def _scons_syntax_error(e):
@@ -662,6 +670,8 @@ def _set_debug_values(options):
     if "heapmonitor" in debug_values:
         heapmonitor_stats.enable(sys.stdout)
         SCons.Heapmonitor.attach_default()
+    if "garbage" in debug_values:
+        garbage_stats.enable(sys.stdout)
 
 def _create_path(plist):
     path = '.'
@@ -1269,9 +1279,10 @@ def main():
         SCons.Script._SConscript.SConscript_exception()
         sys.exit(2)
 
+    heapmonitor_stats.print_stats()
     memory_stats.print_stats()
     count_stats.print_stats()
-    heapmonitor_stats.print_stats()
+    garbage_stats.print_stats()
 
     if print_objects:
         SCons.Debug.listLoggedInstances('*')

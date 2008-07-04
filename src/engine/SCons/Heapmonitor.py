@@ -44,6 +44,9 @@ import time
 import weakref
 import new
 import inspect
+import cPickle
+import gc
+import tempfile
 
 import SCons.asizeof
 import SCons.Debug
@@ -161,6 +164,24 @@ def _trunc(s, max, left=0):
             return s[:(max-3)]+'...'
     else:
         return s
+
+def _pp(i):
+    degree = 0
+    pattern = "%4d     %s"
+    while i > 1024:
+        pattern = "%7.2f %s"
+        i = i / 1024.0
+        degree += 1
+    scales = ['B', 'KB', 'MB', 'GB', 'TB', 'EB']
+    return pattern % (i, scales[degree])
+
+def _get_timestamp(t):
+    """
+    Get a friendly timestamp (as returned by time.time) represented as a string.
+    """
+    rt = t - _local_start
+    h, m, s = int(rt / 3600), int(rt / 60 % 60), rt % 60
+    return "%02d:%02d:%05.2f" % (h, m, s)
 
 class TrackedObject(object):
     """
@@ -467,105 +488,112 @@ def create_snapshot(description=''):
     footprint.append(fp)
 
 
-def find_garbage():
+class MemStats:
     """
-    Let the garbage collector identify ref cycles and check against tracked
-    objects.
-    WARNING: Prototype implementation.
+    Presents the gathered memory statisitics based on user preferences.
     """
-    import gc
-    gc.enable()
-    gc.set_debug(gc.DEBUG_LEAK)
-    gc.collect()
-    for x in gc.garbage:
-        # print str(x)
-        if tracked_objects.has_key(id(x)):
-            print "WARNING: Tracked object is marked as garbage: %s" % repr(tracked_objects[id(x)].ref())
 
-def _pp(i):
-    degree = 0
-    pattern = "%4d     %s"
-    while i > 1024:
-        pattern = "%7.2f %s"
-        i = i / 1024.0
-        degree += 1
-    scales = ['B', 'KB', 'MB', 'GB', 'TB', 'EB']
-    return pattern % (i, scales[degree])
+    def __init__(self, tracked_index=None, footprint=None):
+        """
+        Initialize the data log structures.
+        """
+        self.tracked_index = tracked_index
+        self.footprint = footprint
+    
+    def load(self, fname):
+        """
+        Load the data from a dump file.
+        """
+        log = open(fname, 'r')
+        self.tracked_index = cPickle.load(log)
+        self.footprint = cPickle.load(log)
 
-def _get_timestamp(t):
-    """
-    Get a friendly timestamp (as returned by time.time) represented as a string.
-    """
-    rt = t - _local_start
-    h, m, s = int(rt / 3600), int(rt / 60 % 60), rt % 60
+    def dump(self, fname):
+        """
+        Dump the logged data to a file.
+        """
+        log = open(fname, 'w')
+        cPickle.dump(tracked_index, log)
+        cPickle.dump(footprint, log)
+        log.close()
 
-    return "%02d:%02d:%05.2f" % (h, m, s)
+    def sort_stats(self, *args):
+        # TODO
+        pass
+
+    def diff_stats(self, stats):
+        # TODO
+        return self
+        
+    def print_stats(self, file=sys.stdout, full=0):
+        """
+        Write tracked objects by class to stdout.
+        """
+
+        # Identify the snapshot that tracked the largest amount of memory.
+        tmax = None
+        maxsize = 0
+        for fp in self.footprint:
+            if fp.tracked_total > maxsize:
+                tmax = fp.timestamp
+
+        classlist = self.tracked_index.keys()
+        classlist.sort()
+        summary = []
+
+        # Emit per-instance data
+        for classname in classlist:
+            if full:
+                file.write('\n%s:\n' % classname)
+            sum = 0
+            sorted_index = self.tracked_index[classname]
+            sortsize = lambda i, j: \
+                (i.get_size_at_time(tmax) > j.get_size_at_time(tmax)) and -1 or \
+                (i.get_size_at_time(tmax) < j.get_size_at_time(tmax)) and 1 or 0
+            sorted_index.sort(sortsize)
+            file.write('%s:\n' % classname)
+            for to in sorted_index:
+                to.print_text(file, full=1)
+
+        # Emit class summaries for each snapshot
+        file.write('---- SUMMARY '+'-'*66+'\n')
+        for fp in self.footprint:
+            file.write('%-35s %11s %12s %12s %5s\n' % \
+                (_trunc(fp.desc, 35), 'active', _pp(fp.asizeof_total), 
+                 'average', 'pct'))
+            for classname in classlist:
+                sum = 0
+                active = 0
+                for to in self.tracked_index[classname]:
+                    sum += to.get_size_at_time(fp.timestamp)
+                    if to.birth < fp.timestamp and (to.death is None or 
+                       to.death > fp.timestamp):
+                        active += 1
+                try:
+                    pct = sum * 100 / fp.asizeof_total
+                except ZeroDivisionError:
+                    pct = 0
+                try:
+                    avg = sum / active
+                except ZeroDivisionError:
+                    avg = 0
+                file.write('  %-33s %11d %12s %12s %4d%%\n' % \
+                    (_trunc(classname, 33), active, _pp(sum), _pp(avg), pct))
+        file.write('-'*79+'\n')
 
 def dump_stats(fname):
     """
     Dump the logged data to a file.
     """
-    import cPickle
-    log = open(fname, 'w')
-    cPickle.dump(tracked_index, log)
-    cPickle.dump(footprint, log)
-    log.close()
+    stats = MemStats(tracked_index, footprint)
+    stats.dump(fname)
 
 def print_stats(file=sys.stdout, full=0):
     """
     Write tracked objects by class to stdout.
     """
-
-    # Identify the snapshot that tracked the largest amount of memory.
-    tmax = None
-    maxsize = 0
-    for fp in footprint:
-        if fp.tracked_total > maxsize:
-            tmax = fp.timestamp
-
-    classlist = tracked_index.keys()
-    classlist.sort()
-    summary = []
-
-    # Emit per-instance data
-    for classname in classlist:
-        if full:
-            file.write('\n%s:\n' % classname)
-        sum = 0
-        sorted_index = tracked_index[classname]
-        sortsize = lambda i, j: \
-            (i.get_size_at_time(tmax) > j.get_size_at_time(tmax)) and -1 or \
-            (i.get_size_at_time(tmax) < j.get_size_at_time(tmax)) and 1 or 0
-        sorted_index.sort(sortsize)
-        file.write('%s:\n' % classname)
-        for to in sorted_index:
-            to.print_text(file, full=1)
-
-    # Emit class summaries for each snapshot
-    file.write('---- SUMMARY '+'-'*66+'\n')
-    for fp in footprint:
-        file.write('%-35s %11s %12s %12s %5s\n' % \
-            (_trunc(fp.desc, 35), 'active', _pp(fp.asizeof_total), 
-             'average', 'pct'))
-        for classname in classlist:
-            sum = 0
-            active = 0
-            for to in tracked_index[classname]:
-                sum += to.get_size_at_time(fp.timestamp)
-                if to.birth < fp.timestamp and \
-                    (to.death is None or to.death > fp.timestamp):
-                    active += 1
-            try:
-                pct = sum * 100 / fp.asizeof_total
-            except ZeroDivisionError:
-                pct = 0
-            try:
-                avg = sum / active
-            except ZeroDivisionError:
-                avg = 0
-            file.write('  %-33s %11d %12s %12s %4d%%\n' % \
-                (_trunc(classname, 33), active, _pp(sum), _pp(avg), pct))
-    file.write('-'*79+'\n')
+    stats = MemStats(tracked_index, footprint)
+    stats.print_stats(file, full)
 
 def print_snapshots(file=sys.stdout):
     """
@@ -581,7 +609,97 @@ def print_snapshots(file=sys.stdout):
             (label, _pp(fp.system_total), _pp(fp.asizeof_total), 
             _pp(fp.tracked_total))
         file.write(sample)
-    #file.write('-'*80+'\n')
+
+
+#
+# Garbage collection.
+# Use the data exposed by the garbage collector to present the data in a
+# meaningful and user-friendly way.
+#
+
+class Garbage:
+    pass
+
+def _visualize_gc_graphviz(garbage, file):
+    """
+    Emit a graph representing the connections between the objects collected by
+    the garbage collector. The text representation can be transformed to a graph
+    with graphviz.
+    The file has to permit write access and is closed at the end of the
+    function.
+    """
+    gid = [g.id for g in garbage]
+
+    header = '// Process this file with graphviz\n'
+
+    file.write(header)
+    file.write('digraph G {\n')
+    for x, g in map(None, gc.garbage, garbage):
+        label = _trunc(g.str, 32).replace('"', "'")
+        extra = ''
+        if g.type == 'instancemethod':
+            extra = ', color = red'
+        file.write('    "X%08x" [ label = "%s\\n%s" %s ];\n' % \
+            (id(x), label, g.type, extra))
+        refs = [id(r) for r in gc.get_referrers(x)]
+        for r in refs:
+            if r in gid:
+                file.write('    X%08x -> X%08x;\n' % (r, id(x)))
+    file.write('}\n')
+    file.close()
+
+def find_garbage(sizer, graphfile=None):
+    """
+    Let the garbage collector identify ref cycles and check against tracked
+    objects.
+    """
+    gc.enable()
+    gc.set_debug(gc.DEBUG_SAVEALL)
+    gc.collect()
+    garbage = []
+    for obj, sz in map(None, gc.garbage, sizer.asizesof(*gc.garbage)):
+        g = Garbage()
+        g.size = sz
+        g.id = id(obj)
+        try:
+            g.type = obj.__class__.__name__
+        except AttributeError:
+            g.type = type(obj)
+        g.str = _trunc(str(obj), 128)
+        garbage.append(g)
+    
+    if graphfile and len(garbage) > 0:
+        _visualize_gc_graphviz(garbage, graphfile)
+
+    return garbage
+
+def print_garbage_stats(file=sys.stdout):
+    """
+    Print statistics related to garbage/leaks.
+    """
+
+    gf_name = tempfile.mktemp(prefix='graph', suffix='.txt') # FIXME deprecated
+
+    garbage = find_garbage(SCons.asizeof.Asizer(), open(gf_name, 'w'))
+
+    sz = 0
+    sortgarbage = lambda a, b: \
+        a.size > b.size and -1 or \
+        a.size < b.size and 1 or 0
+    garbage.sort(sortgarbage)
+    for g in garbage:
+        sz += g.size
+        #print '0x%08x %8d %-12s %-108s' % (g.id, g.size, _trunc(g.type, 12),
+        #    _trunc(g.str, 108))
+    cnt = len(garbage)
+    file.write('Garbage: %8d collected objects: %12s\n' % (cnt, _pp(sz)))
+    if cnt:
+        file.write("Garbage reference graph (graphviz) saved to: %s\n" % gf_name)
+
+
+#
+# SCons specific functions.
+#
 
 def attach_default():
     """
