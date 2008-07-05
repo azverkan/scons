@@ -422,6 +422,25 @@ def CreateJavaFileBuilder(env):
         env['JAVASUFFIX'] = '.java'
     return java_file
 
+##########################################################################
+#  Create Python builder
+def createPythonBuilder(env):
+    try:
+        PythonInstallBuilder = env['BUILDERS']['InstallPython']
+    except KeyError:
+        from install import installFunc, stringFunc, add_targets_to_INSTALLED_FILES
+        installpython_action = SCons.Action.Action(installFunc, stringFunc)
+        PythonInstallBuilder = SCons.Builder.Builder(
+                                 action = installpython_action,
+                                 target_factory = env.fs.Entry,
+                                 source_factory = env.fs.Entry,
+                                 multi = 1,
+                                 emitter = [ add_targets_to_INSTALLED_FILES ],
+                                 name = 'InstallPythonBuilder')
+
+    return PythonInstallBuilder
+
+
 class ToolInitializerMethod:
     """
     This is added to a construction environment in place of a
@@ -645,7 +664,7 @@ def tool_list(platform, env):
                                 'jar', 'javac', 'javah',
                                 'latex', 'lex',
                                 'm4', 'midl', 'msvs',
-                                'pdflatex', 'pdftex', 'Perforce',
+                                'pdflatex', 'pdftex', 'Perforce', 'python',
                                 'RCS', 'rmic', 'rpcgen',
                                 'SCCS',
                                 # 'Subversion',
