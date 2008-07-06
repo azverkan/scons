@@ -155,6 +155,7 @@ def generate(env):
     env['PYO_FLAGS'] = '-O'
     env['PYO_CMD'] = "-c 'import sys,py_compile; [py_compile.compile(i) for i in sys.argv[1:]]' "
     env['PYCOM'] = '$PYTHON $PYO_FLAGS $PYO_CMD '
+    env['PYCOMSTR'] = 'Install file: "$SOURCE" as "$TARGET"'
 
     env['PYSUFFIX'] = 'PYC'
     env['BUILDERS']['InstallPython'] =  InstallPython
