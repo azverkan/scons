@@ -431,15 +431,15 @@ def createPythonBuilder(env):
     If it's there already, we return the existing one.
 
     This builder is based on Install/InstallAs methods. It makes use
-    of those builder's functions: installFunc(), stringFunc() and
+    of those builder's functions: installFunc(), and
     add_targets_to_INSTALLED_FILES()).
     """
 
     try:
         PythonInstallBuilder = env['BUILDERS']['InstallPython']
     except KeyError:
-        from install import installFunc, stringFunc, add_targets_to_INSTALLED_FILES
-        installpython_action = SCons.Action.Action(installFunc, stringFunc)
+        from install import installFunc, add_targets_to_INSTALLED_FILES
+        installpython_action = SCons.Action.Action(installFunc, '$PYCOMSTR')
         PythonInstallBuilder = SCons.Builder.Builder(
                                  action = installpython_action,
                                  target_factory = env.fs.Entry,
