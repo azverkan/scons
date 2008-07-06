@@ -442,6 +442,7 @@ def createPythonBuilder(env):
         installpython_action = SCons.Action.Action(installFunc, '$PYCOMSTR')
         PythonInstallBuilder = SCons.Builder.Builder(
                                  action = installpython_action,
+                                 src_suffix = '$PYTHONSUFFIX',
                                  target_factory = env.fs.Entry,
                                  source_factory = env.fs.Entry,
                                  multi = 1,
