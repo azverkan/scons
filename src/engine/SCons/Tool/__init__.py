@@ -425,6 +425,16 @@ def CreateJavaFileBuilder(env):
 ##########################################################################
 #  Create Python builder
 def createPythonBuilder(env):
+    """This is a utility function that creates the InstallPython
+    Builder in an Environment if it's not there already.
+
+    If it's there already, we return the existing one.
+
+    This builder is based on Install/InstallAs methods. It makes use
+    of those builder's functions: installFunc(), stringFunc() and
+    add_targets_to_INSTALLED_FILES()).
+    """
+
     try:
         PythonInstallBuilder = env['BUILDERS']['InstallPython']
     except KeyError:
