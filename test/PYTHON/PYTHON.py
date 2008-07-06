@@ -77,7 +77,7 @@ pybuilder_test('c')
 
 test.write('SConstruct',
 """
-env = Environment(PYSUFFIX = "PYO")
+env = Environment(TARGETSUFFIX = "PYO")
 hello = File('%s/%s')
 hello2 = File('%s/%s')
 pydir = Dir('%s')
