@@ -1,0 +1,68 @@
+<!--
+__COPYRIGHT__
+
+This file is processed by the bin/SConsDoc.py module.
+See its __doc__ string for a discussion of the format.
+-->
+<tool name="python">
+<summary>
+Sets construction variables for the &python; binary builder.
+</summary>
+<sets>
+PYTHON
+PYCOM
+PYCOMSTR
+PYO_FLAGS
+PYO_CMD
+PYSUFFIX
+InstallPython
+</sets>
+<uses>
+</uses>
+</tool>
+
+<cvar name="PYTHON">
+<summary>
+The python binary.
+</summary>
+</cvar>
+
+<cvar name="PYCOM">
+<summary>
+The command line used to generate optimized binary from python source file.
+</summary>
+</cvar>
+
+<cvar name="PYCOMSTR">
+<summary>
+The string displayed when a file is installed in target directory.
+
+<example>
+env = Environment(PYCOMSTR = "Installing $SOURCE as $TARGET...")
+</example>
+</summary>
+</cvar>
+
+<cvar name="PYO_FLAGS">
+<summary>
+An option passed to the command line to create optimized python binary.
+</summary>
+</cvar>
+
+<cvar name="PYO_CMD">
+<summary>
+A command passed to python to create optimized python binary.
+</summary>
+</cvar>
+
+<cvar name="PYSUFFIX">
+<summary>
+When set to 'PYO' compiles source to optimized python binary (ordinary .pyc binary otherwise).
+</summary>
+</cvar>
+
+<cvar name="InstallPython">
+<summary>
+Sets InstallPython builder.
+</summary>
+</cvar>
