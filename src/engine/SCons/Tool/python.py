@@ -82,7 +82,7 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
             raise SCons.Errors.InternalError, "Couldn't import compileall module"
         import glob
 
-    if env['PYSUFFIX'] == 'PYO':
+    if env['TARGETSUFFIX'] == 'PYO':
         pysuffix = 'o'
     else:
         pysuffix = 'c'
@@ -154,10 +154,12 @@ def generate(env):
     env['PYTHON'] = 'python'
     env['PYO_FLAGS'] = '-O'
     env['PYO_CMD'] = "-c 'import sys,py_compile; [py_compile.compile(i) for i in sys.argv[1:]]' "
+
     env['PYCOM'] = '$PYTHON $PYO_FLAGS $PYO_CMD '
     env['PYCOMSTR'] = 'Install file: "$SOURCE" as "$TARGET"'
 
-    env['PYSUFFIX'] = 'PYC'
+    env['TARGETSUFFIX'] = 'PYC'
+    env['PYTHONSUFFIX'] = '.py'
     env['BUILDERS']['InstallPython'] =  InstallPython
 
 def exists(env):
