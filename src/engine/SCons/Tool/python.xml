@@ -55,7 +55,13 @@ A command passed to python to create optimized python binary.
 </summary>
 </cvar>
 
-<cvar name="PYSUFFIX">
+<cvar name="PYTHONSUFFIX">
+<summary>
+The suffix of python source files.
+</summary>
+</cvar>
+
+<cvar name="TARGETSUFFIX">
 <summary>
 When set to 'PYO' compiles source to optimized python binary (ordinary .pyc binary otherwise).
 </summary>
