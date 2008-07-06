@@ -42,16 +42,27 @@ import SCons.Tool
 
 
 def InstallPython(env, target=None, source=None, dir=None, **kw):
+    """InstallPython creates .pyc or .pyo files for .py source files
+    and adds them to the list of targets along with the source files.
+    They are later copied to the destination (target) directory.
+
+    InstallPython takes target (destination) directory as its first
+    argument and a list of source files/directories as a second argument.
+
+    InstallPython returns the list of target files to copy to the
+    target directory.
+    """
+
     if target and dir:
         import SCons.Errors
-        raise SCons.Errors.UserError, "Both target and dir defined for Install(), only one may be defined."
+        raise SCons.Errors.UserError, "Both target and dir defined for InstallPython(), only one may be defined."
     if not dir:
         dir=target
     
     try:
         dnodes = env.arg2nodes(dir, env.fs.Dir)
     except TypeError:
-        raise SCons.Errors.UserError, "Target `%s' of Install() is a file, but should be a directory.  Perhaps you have the Install() arguments backwards?" % str(dir)
+        raise SCons.Errors.UserError, "Target `%s' of Install() is a file, but should be a directory.  Perhaps you have the InstallPython() arguments backwards?" % str(dir)
 
     sources = env.arg2nodes(source, env.fs.Entry)
     tgt = []
@@ -59,7 +70,7 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
     try:
         import py_compile
     except ImportError:
-        raise SCons.Errors.InternalError, "Couldn't import `py_compile` module"
+        raise SCons.Errors.InternalError, "Couldn't import py_compile module"
 
     # import `compileall` module only if there is a dir in sources list
     import SCons.Node
@@ -68,7 +79,7 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
         try:
             import compileall
         except ImportError:
-            raise SCons.Errors.InternalError, "Couldn't import `compileall` module"
+            raise SCons.Errors.InternalError, "Couldn't import compileall module"
         import glob
 
     if env['PYSUFFIX'] == 'PYO':
