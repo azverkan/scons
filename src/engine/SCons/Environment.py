@@ -2031,7 +2031,7 @@ class Base(SubstitutionEnvironment):
         return list(set(sources))
 
     def FindInstalledFiles(self):
-        """ returns the list of all targets of the Install and InstallAs Builder.
+        """ returns the list of all targets of the Install, InstallAs and InstallPython Builders.
         """
         from SCons.Tool import install
         if install._UNIQUE_INSTALLED_FILES is None:
