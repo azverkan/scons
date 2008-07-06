@@ -69,6 +69,7 @@ SCons/Tool/packaging/__init__.xml
 SCons/Tool/pdf.xml
 SCons/Tool/pdflatex.xml
 SCons/Tool/pdftex.xml
+SCons/Tool/python.xml
 SCons/Tool/Perforce.xml
 SCons/Tool/qt.xml
 SCons/Tool/RCS.xml
