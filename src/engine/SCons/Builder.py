@@ -414,6 +414,8 @@ class BuilderBase:
             src_builder = [ src_builder ]
         self.src_builder = src_builder
 
+        self.stripper = {}
+
     def __nonzero__(self):
         raise InternalError, "Do not test for the Node.builder attribute directly; use Node.has_builder() instead"
 
@@ -660,6 +662,12 @@ class BuilderBase:
         appropriate method to call for the Builder in question.
         """
         self.emitter[suffix] = emitter
+
+    def add_stripper(self, suffix, stripper):
+        self.stripper[suffix] = stripper
+
+    def get_stripper(self, suffix):
+        return self.stripper[suffix]
 
     def add_src_builder(self, builder):
         """
