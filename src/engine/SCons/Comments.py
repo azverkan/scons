@@ -155,6 +155,9 @@ def Comments(filename, comment_char = '#'):
     return ''.join(buf)
 
 
+def FortranComments(filename):
+    return Comments(filename, '!')
+
 def CCode(filename):
     """Strip the code from the file and return comments.
     
