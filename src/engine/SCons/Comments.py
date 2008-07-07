@@ -1,6 +1,6 @@
 """SCons.Comments
 
-Comments stripping function + control function (temporarily?).
+Comments/code stripping functions.
 """
 
 #
@@ -29,39 +29,8 @@ Comments stripping function + control function (temporarily?).
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 
-
 import sys
 import SCons.Util
-
-SIGS_DIFFER = 3
-SIGS_EQUAL = 2
-SIGS_WHOLE = 1 # count md5 sum for whole file
-
-def Stripper(dependency, target, prev_ni):
-    """Main control function for comments stripping framework.
-    According to the target's type Stripper() decides what to
-    strip from the dependency file."""
-
-    d, t = dependency, target
-    dx, tx = d.suffix, t.suffix
-
-    if (dx == '.c' or dx == '.h') and tx == '.o':
-        code = CComments(str(dependency))
-        if not dependency.rexists():
-            return SIGS_WHOLE
-
-        csig = SCons.Util.MD5signature(code)
-        dependency.ninfo.csig = csig #psig = psig
-        try:
-            if dependency.ninfo.csig != prev_ni.csig:#psig != prev_ni.psig:
-                return SIGS_DIFFER
-            else:
-                return SIGS_EQUAL
-        except AttributeError:
-            return SIGS_WHOLE
-    return SIGS_WHOLE
-
-
 
 def quoting_to_buf(txt, i, len_max, quot='"'):
     """Extract quoted string from the buffer.
