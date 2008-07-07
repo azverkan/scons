@@ -68,15 +68,15 @@ def generate(env):
     """
     static_obj, shared_obj = SCons.Tool.createObjBuilders(env)
 
-    from SCons.Comments import CComments
+    from SCons.Comments import StripCComments
 
     for suffix in CSuffixes:
         static_obj.add_action(suffix, SCons.Defaults.CAction)
         shared_obj.add_action(suffix, SCons.Defaults.ShCAction)
         static_obj.add_emitter(suffix, SCons.Defaults.StaticObjectEmitter)
         shared_obj.add_emitter(suffix, SCons.Defaults.SharedObjectEmitter)
-        static_obj.add_stripper(suffix, CComments)
-        shared_obj.add_stripper(suffix, CComments)
+        static_obj.add_stripper(suffix, StripCComments)
+        shared_obj.add_stripper(suffix, StripCComments)
 
 #<<<<<<< .working
 #
