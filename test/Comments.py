@@ -34,7 +34,7 @@ test.write(['C-one', cfile], ccode)
 test.write(['C-one', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.CComments('ccomments.c'))
+print r"%s" % (Comments.StripCComments('ccomments.c'))
 """)
 
 test.run(chdir = 'C-one', arguments = '-q -Q', stdout = r"""#include<stdio.h>intmain(void){intw=10+1;charx='\'';chary='\n';printf("not comment\n\\\"\\");printf("\"/\\/* not comment\"/\\/*\n");printf("'///*not comment*/'");printf("/");printf("/**\"not comment*/");return0;}
@@ -47,7 +47,7 @@ test.write(['C-two', cfile], ccode)
 test.write(['C-two', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.CCode('ccomments.c'))
+print r"%s" % (Comments.StripCCode('ccomments.c'))
 """)
 
 
@@ -81,7 +81,7 @@ test.write(['D-one', dfile], dcode)
 test.write(['D-one', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.DComments('dcomments.d'))
+print r"%s" % (Comments.StripDComments('dcomments.d'))
 """)
 
 test.run(chdir = 'D-one', arguments = '-q -Q', stdout = r"""importstd.stdio;voidmain(){writefln("/+\" not \\\\\"comment\" +/");writefln("//\\\\\" not comment");writefln("/* not comment */");}
@@ -93,7 +93,7 @@ test.write(['D-two', dfile], dcode)
 test.write(['D-two', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.DCode('dcomments.d'))
+print r"%s" % (Comments.StripDCode('dcomments.d'))
 """)
 
 
@@ -120,7 +120,7 @@ test.write(['py-one', pyfile], pycode)
 test.write(['py-one', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.Comments('pycomments.py'))
+print r"%s" % (Comments.StripComments('pycomments.py'))
 """)
 
 test.run(chdir = 'py-one', arguments = '-q -Q', stdout = r"""print"#! not comment\\\\\""print'#! not comment'print'"#! not comment"'print"'#! not comment'"
@@ -133,7 +133,7 @@ test.write(['py-two', pyfile], pycode)
 test.write(['py-two', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.Code('pycomments.py'))
+print r"%s" % (Comments.StripCode('pycomments.py'))
 """)
 
 
@@ -163,7 +163,7 @@ test.write(['fortran-one', ffile], fcode)
 test.write(['fortran-one', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.Comments('fcomments.f90', '!'))
+print r"%s" % (Comments.StripFortranComments('fcomments.f90'))
 """)
 
 test.run(chdir = 'fortran-one', arguments = '-q -Q', stdout = r"""programhelloprint*,"! not comment"print*,'! not comment'print*,'"! not comment"'print*,"'! not comment'"endprogramhello
@@ -175,7 +175,7 @@ test.write(['fortran-two', ffile], fcode)
 test.write(['fortran-two', 'SConstruct'],
       """
 import Comments
-print r"%s" % (Comments.Code('fcomments.f90', '!'))
+print r"%s" % (Comments.StripFortranCode('fcomments.f90'))
 """)
 
 
