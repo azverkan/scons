@@ -75,7 +75,7 @@ def quoting_to_buf(txt, i, len_max, quot='"'):
     return buf, i
 
 
-def Code(filename, comment_char = '#'):
+def StripCode(filename, comment_char = '#'):
     """Strip the source code from the file and return comments.
     
     Open the file 'filename', get the contents, strip the code
@@ -113,7 +113,7 @@ def Code(filename, comment_char = '#'):
     return ''.join(buf)
 
 
-def Comments(filename, comment_char = '#'):
+def StripComments(filename, comment_char = '#'):
     """Strip the comments from the file and return source code.
     
     Open the file 'filename', get the contents, strip the comments
@@ -155,10 +155,13 @@ def Comments(filename, comment_char = '#'):
     return ''.join(buf)
 
 
-def FortranComments(filename):
-    return Comments(filename, '!')
+def StripFortranComments(filename):
+    return StripComments(filename, '!')
 
-def CCode(filename):
+def StripFortranCode(filename):
+    return StripCode(filename, '!')
+
+def StripCCode(filename):
     """Strip the code from the file and return comments.
     
     Open the file 'filename', get the contents, strip the comments
@@ -200,7 +203,7 @@ def CCode(filename):
     return ''.join(buf)
 
 
-def CComments(filename):
+def StripCComments(filename):
     """Strip C-like comments from the file and return source code.
     
     Open the file 'filename', get the contents, strip the comments
@@ -244,7 +247,7 @@ def CComments(filename):
     return ''.join(buf)
 
 
-def DCode(filename):
+def StripDCode(filename):
     """Strip the code from the file and return comments.
     
     Open the file 'filename', get the contents, strip the comments
@@ -298,7 +301,7 @@ def DCode(filename):
     return ''.join(buf)
 
 
-def DComments(filename):
+def StripDComments(filename):
     """Strip C-like comments from the file and return source code.
     
     Open the file 'filename', get the contents, strip the comments
