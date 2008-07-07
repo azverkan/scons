@@ -200,12 +200,17 @@ def Java(env, target, source, *args, **kw):
 
 def generate(env):
     """Add Builders and construction variables for javac to an Environment."""
+    from SCons.Comments import CComments
+    javasuffix = env.subst('$JAVASUFFIX')
     java_file = SCons.Tool.CreateJavaFileBuilder(env)
     java_class = SCons.Tool.CreateJavaClassFileBuilder(env)
     java_class_dir = SCons.Tool.CreateJavaClassDirBuilder(env)
     java_class.add_emitter(None, emit_java_classes)
-    java_class.add_emitter(env.subst('$JAVASUFFIX'), emit_java_classes)
+    java_class.add_emitter(env.subst(javasuffix), emit_java_classes)
     java_class_dir.emitter = emit_java_classes
+    java_file.add_stripper(env.subst(javasuffix), CComments)
+    java_class.add_stripper(env.subst(javasuffix), CComments)
+    java_class_dir.add_stripper(env.subst(javasuffix), CComments)
 
     env.AddMethod(Java)
 
