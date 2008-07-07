@@ -2695,14 +2695,15 @@ class File(Base):
         self.changed_since_last_build = self.decide_target
 
     def changed_content(self, target, prev_ni):
-        d, t = str(self), str(target)
-        piece = SCons.Comments.Stripper(self, target, prev_ni)
-        if piece == SCons.Comments.SIGS_DIFFER:
-            return 1
-        elif piece == SCons.Comments.SIGS_EQUAL:
-            return 0
+        try:
+            stripper = target.builder.get_stripper(self.suffix)
+            code = stripper(str(self))
+            cur_csig = SCons.Util.MD5signature(code)
+            ninfo = self.get_ninfo()
+            ninfo.csig = cur_csig
+        except:
+            cur_csig = self.get_csig()
 
-        cur_csig = self.get_csig()
         try:
             return cur_csig != prev_ni.csig
         except AttributeError:
