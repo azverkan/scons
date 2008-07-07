@@ -123,17 +123,23 @@ def DialectAddToEnv(env, dialect, suffixes, ppsuffixes, support_module = 0):
 
     static_obj, shared_obj = SCons.Tool.createObjBuilders(env)
 
+    from SCons.Comments import FortranComments
+
     for suffix in suffixes:
         static_obj.add_action(suffix, compaction)
         shared_obj.add_action(suffix, shcompaction)
         static_obj.add_emitter(suffix, FortranEmitter)
         shared_obj.add_emitter(suffix, ShFortranEmitter)
+        static_obj.add_stripper(suffix, FortranComments)
+        shared_obj.add_stripper(suffix, FortranComments)
 
     for suffix in ppsuffixes:
         static_obj.add_action(suffix, compppaction)
         shared_obj.add_action(suffix, shcompppaction)
         static_obj.add_emitter(suffix, FortranEmitter)
         shared_obj.add_emitter(suffix, ShFortranEmitter)
+        static_obj.add_stripper(suffix, FortranComments)
+        shared_obj.add_stripper(suffix, FortranComments)
 
     if not env.has_key('%sFLAGS' % dialect):
         env['%sFLAGS' % dialect] = SCons.Util.CLVar('')
