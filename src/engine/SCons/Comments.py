@@ -32,6 +32,8 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import sys
 import SCons.Util
 
+whitespaces = '\t\r\n '
+
 def quoting_to_buf(txt, i, len_max, quot='"'):
     """Extract quoted string from the buffer.
 
@@ -106,7 +108,7 @@ def StripCode(filename, comment_char = '#'):
         # add the comment to the buffer
         elif txt[i] == comment_char:
             while i < len_max and txt[i] != '\n':
-                if not (txt[i] == ' ' or txt[i] == '\n'):
+                if not (txt[i] in whitespaces):
                     buf.append(txt[i])
                 i += 1
         i += 1
@@ -149,7 +151,7 @@ def StripComments(filename, comment_char = '#'):
                 i += 1
         # add everything else to the buffer
         else:
-            if not (txt[i] == ' ' or txt[i] == '\n'):
+            if not (txt[i] in whitespaces):
                 buf.append(txt[i])
         i += 1
 
@@ -188,7 +190,7 @@ def StripCCode(filename):
         # add '//' comment to the buffer
         if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
-                if not (txt[i] == ' ' or txt[i] == '\n'):
+                if not (txt[i] in whitespaces):
                     buf.append(txt[i])
                 i += 1
         # add '/* */' comment to the buffer
@@ -197,7 +199,7 @@ def StripCCode(filename):
                 if txt[i] == '*' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
                     break
-                if not (txt[i] == ' ' or txt[i] == '\n'):
+                if not (txt[i] in whitespaces):
                     buf.append(txt[i])
                 i += 1
         i+=1
@@ -241,7 +243,7 @@ def StripCComments(filename):
                 i += 1
         # add the code to the buffer
         else:
-            if not (txt[i] == ' ' or txt[i] == '\n'):
+            if not (txt[i] in whitespaces):
                 buf.append(txt[i])
         i += 1
 
@@ -284,7 +286,7 @@ def StripDCode(filename):
                 if txt[i] == '*' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
                     break
-                if not (txt[i] == ' ' or txt[i] == '\n'):
+                if not (txt[i] in whitespaces):
                     buf.append(txt[i])
                 i += 1
             metachars = 0
@@ -294,7 +296,7 @@ def StripDCode(filename):
                 if txt[i] == '+' and txt[i+1] == '/':
                     buf.append(txt[i]); buf.append(txt[i+1])
                     break
-                if not (txt[i] == ' ' or txt[i] == '\n'):
+                if not (txt[i] in whitespaces):
                     buf.append(txt[i])
                 i += 1
             metachars = 0
@@ -346,7 +348,7 @@ def StripDComments(filename):
                 i += 1
         # add to buffer
         else:
-            if not (txt[i] == ' ' or txt[i] == '\n'):
+            if not (txt[i] in whitespaces):
                 buf.append(txt[i])
         i += 1
 
