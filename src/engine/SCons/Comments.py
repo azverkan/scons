@@ -37,7 +37,8 @@ def quoting_to_buf(txt, i, len_max, quot='"'):
 
     Takes four arguments:
     'txt' - file contents (as a string or list of characters)
-    'i' - current position in the file
+    'i' - current position in the file (when calling
+          quoting_to_buf() 'i' *must* be an opening quote char)
     'len_max' - length of the string/list 'txt'
     'quot' - quoting sign (default: '"')
 
