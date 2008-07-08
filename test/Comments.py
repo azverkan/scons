@@ -1,6 +1,4 @@
 import TestSCons
-import Comments
-
 
 # test C-stripper
 
@@ -80,8 +78,8 @@ test.write([subdirs[0], cfile], ccode)
 
 test.write([subdirs[0], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripCComments('ccomments.c'))
+from SCons.Comments import StripCComments
+print r"%s" % (StripCComments('ccomments.c'))
 """)
 
 test.run(chdir = subdirs[0], arguments = '-q -Q', stdout = r"""#include<stdio.h>intmain(void){intw=10+1;charx='\'';chary='\n';printf("not comment\n\\\"\\");printf("\"/\\/* not comment\"/\\/*\n");printf("'///*not comment*/'");printf("/");printf("/**\"not comment*/");return0;}
@@ -93,8 +91,8 @@ test.write([subdirs[1], cfile], ccode)
 
 test.write([subdirs[1], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripCCode('ccomments.c'))
+from SCons.Comments import StripCCode
+print r"%s" % (StripCCode('ccomments.c'))
 """)
 
 
@@ -127,8 +125,8 @@ test.write([subdirs[2], dfile], dcode)
 
 test.write([subdirs[2], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripDComments('dcomments.d'))
+from SCons.Comments import StripDComments
+print r"%s" % (StripDComments('dcomments.d'))
 """)
 
 test.run(chdir = subdirs[2], arguments = '-q -Q', stdout = r"""importstd.stdio;voidmain(){writefln("/+\" not \\\\\"comment\" +/");writefln("//\\\\\" not comment");writefln("/* not comment */");}
@@ -139,8 +137,8 @@ test.write([subdirs[3], dfile], dcode)
 
 test.write([subdirs[3], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripDCode('dcomments.d'))
+from SCons.Comments import StripDCode
+print r"%s" % (StripDCode('dcomments.d'))
 """)
 
 
@@ -166,8 +164,8 @@ test.write([subdirs[4], pyfile], pycode)
 
 test.write([subdirs[4], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripComments('pycomments.py'))
+from SCons.Comments import StripComments
+print r"%s" % (StripComments('pycomments.py'))
 """)
 
 test.run(chdir = subdirs[4], arguments = '-q -Q', stdout = r"""print"#! not comment\\\\\""print'#! not comment'print'"#! not comment"'print"'#! not comment'"
@@ -179,8 +177,8 @@ test.write([subdirs[5], pyfile], pycode)
 
 test.write([subdirs[5], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripCode('pycomments.py'))
+from SCons.Comments import StripCode
+print r"%s" % (StripCode('pycomments.py'))
 """)
 
 
@@ -189,9 +187,7 @@ test.run(chdir = subdirs[5], arguments = '-q -Q', stdout = r"""#!/usr/bin/envpyt
 
 
 
-
 # fortran-stripper test (char test)
-
 
 ffile = 'fcomments.f90'
 fcode = r"""
@@ -209,8 +205,8 @@ test.write([subdirs[6], ffile], fcode)
 
 test.write([subdirs[6], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripFortranComments('fcomments.f90'))
+from SCons.Comments import StripFortranComments
+print r"%s" % (StripFortranComments('fcomments.f90'))
 """)
 
 test.run(chdir = subdirs[6], arguments = '-q -Q', stdout = r"""programhelloprint*,"! not comment"print*,'! not comment'print*,'"! not comment"'print*,"'! not comment'"endprogramhello
@@ -221,8 +217,8 @@ test.write([subdirs[7], ffile], fcode)
 
 test.write([subdirs[7], 'SConstruct'],
       """
-import Comments
-print r"%s" % (Comments.StripFortranCode('fcomments.f90'))
+from SCons.Comments import StripFortranCode
+print r"%s" % (StripFortranCode('fcomments.f90'))
 """)
 
 
