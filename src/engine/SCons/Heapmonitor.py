@@ -617,10 +617,27 @@ def print_snapshots(file=sys.stdout):
 # meaningful and user-friendly way.
 #
 
+graphviz_file = None
+
 class Garbage:
     pass
 
-def _visualize_gc_graphviz(garbage, file):
+def _log_garbage(garbage, file=sys.stdout):
+    """
+    Log garbage to console.
+    """
+    sz = 0
+    sortgarbage = lambda a, b: \
+        a.size > b.size and -1 or \
+        a.size < b.size and 1 or 0
+    garbage.sort(sortgarbage)
+    file.write('%-10s %8s %-12s %-46s\n' % ('id', 'size', 'type', 'representation'))
+    for g in garbage:
+        sz += g.size
+        file.write('0x%08x %8d %-12s %-46s\n' % (g.id, g.size, _trunc(g.type, 12),
+            _trunc(g.str, 46)))
+
+def _visualize_gc_graphviz(garbage, metagarbage, edges, file):
     """
     Emit a graph representing the connections between the objects collected by
     the garbage collector. The text representation can be transformed to a graph
@@ -628,36 +645,84 @@ def _visualize_gc_graphviz(garbage, file):
     The file has to permit write access and is closed at the end of the
     function.
     """
-    gid = [g.id for g in garbage]
-
     header = '// Process this file with graphviz\n'
-
     file.write(header)
     file.write('digraph G {\n')
-    for x, g in map(None, gc.garbage, garbage):
-        label = _trunc(g.str, 32).replace('"', "'")
+    for n, g in map(None, garbage, metagarbage):
+        label = _trunc(g.str, 48).replace('"', "'")
         extra = ''
         if g.type == 'instancemethod':
             extra = ', color = red'
         file.write('    "X%08x" [ label = "%s\\n%s" %s ];\n' % \
-            (id(x), label, g.type, extra))
-        refs = [id(r) for r in gc.get_referrers(x)]
-        for r in refs:
-            if r in gid:
-                file.write('    X%08x -> X%08x;\n' % (r, id(x)))
+            (id(n), label, g.type, extra))
+    for (i, j, l) in edges:
+        file.write('    X%08x -> X%08x [label="%s"];\n' % (i, j, l))
+
     file.write('}\n')
     file.close()
 
-def find_garbage(sizer, graphfile=None):
+def eliminate_leafs(graph, get_referents, get_referrers=None, debug=0):
     """
-    Let the garbage collector identify ref cycles and check against tracked
-    objects.
+    Eliminate leaf objects (not directly part of cycles).
     """
-    gc.enable()
+    result = []
+    idset = set([id(x) for x in graph])
+    for n in graph:
+        refset = set([id(x) for x in get_referents(n)])
+        if refset.intersection(idset):
+            result.append(n)
+    return result
+
+def get_edges(graph, get_referents):
+    """
+    Compute the edges for the reference graph.
+    The function returns a set of tuples (id(a), id(b), ref) if a
+    references b with the referent 'ref'.
+    """
+    idset = set([id(x) for x in graph])
+    edges = set([])
+    for n in graph:
+        refset = set([id(x) for x in get_referents(n)])
+        for ref in refset.intersection(idset):
+            label = ''
+            # FIXME The commented out code below shall find the referent's name
+            # with dir and getattr. However, for some objects (like frames) this
+            # will change/delete references of the referred object and breaks
+            # cycles. Find a safe way to extract the referent name.
+            #try:
+            #    label = [a for a in dir(n) if id(getattr(n, a)) == ref][0]
+            #except:
+            #    label = ''
+            edges.add((id(n), ref, label))
+    return edges
+
+def find_garbage(sizer, graphfile=None, prune=1):
+    """
+    Let the garbage collector identify ref cycles.
+    First, the garbage collector runs and saves the garbage into gc.garbage. The
+    leafs of the reference graph will be pruned to only include objects directly
+    involved in actual cycles. The remaining garbage elements will be sized
+    (which will include the pruned leaf sizes) and annotated. If a graphfile is
+    passed and garbage was detected, the garbage will be visualized in graphviz
+    format.
+    The total number of garbage and the annotated cycle elements are returned.
+    """
     gc.set_debug(gc.DEBUG_SAVEALL)
     gc.collect()
+
+    total = len(gc.garbage)
+    cnt = 0
+    cycles = gc.garbage[:]
+
+    if prune:
+        while cnt != len(cycles):
+            cnt = len(cycles)
+            cycles = eliminate_leafs(cycles, gc.get_referents)
+
+    edges = get_edges(cycles, gc.get_referents)
+
     garbage = []
-    for obj, sz in map(None, gc.garbage, sizer.asizesof(*gc.garbage)):
+    for obj, sz in map(None, cycles, sizer.asizesof(*cycles)):
         g = Garbage()
         g.size = sz
         g.id = id(obj)
@@ -665,36 +730,38 @@ def find_garbage(sizer, graphfile=None):
             g.type = obj.__class__.__name__
         except AttributeError:
             g.type = type(obj)
-        g.str = _trunc(str(obj), 128)
+        except ReferenceError:
+            g.type = type(obj)
+        try:
+            g.str = _trunc(str(obj), 128)
+        except ReferenceError:
+            g.str = ''
         garbage.append(g)
     
     if graphfile and len(garbage) > 0:
-        _visualize_gc_graphviz(garbage, graphfile)
+        _visualize_gc_graphviz(cycles, garbage, edges, graphfile)
 
-    return garbage
+    return total, garbage
 
 def print_garbage_stats(file=sys.stdout):
     """
     Print statistics related to garbage/leaks.
     """
 
-    gf_name = tempfile.mktemp(prefix='graph', suffix='.txt') # FIXME deprecated
+    f = None
+    if graphviz_file:
+        f = open(graphviz_file, 'w')
 
-    garbage = find_garbage(SCons.asizeof.Asizer(), open(gf_name, 'w'))
+    sizer = SCons.asizeof.Asizer()
+    total, garbage = find_garbage(sizer, f)
+    sz = sizer.total
 
-    sz = 0
-    sortgarbage = lambda a, b: \
-        a.size > b.size and -1 or \
-        a.size < b.size and 1 or 0
-    garbage.sort(sortgarbage)
-    for g in garbage:
-        sz += g.size
-        #print '0x%08x %8d %-12s %-108s' % (g.id, g.size, _trunc(g.type, 12),
-        #    _trunc(g.str, 108))
     cnt = len(garbage)
-    file.write('Garbage: %8d collected objects: %12s\n' % (cnt, _pp(sz)))
-    if cnt:
-        file.write("Garbage reference graph (graphviz) saved to: %s\n" % gf_name)
+    if cnt and graphviz_file:
+        file.write("Garbage reference graph saved to: %s\n" % graphviz_file)
+    elif cnt:
+        _log_garbage(garbage, file)
+    file.write('Garbage: %8d collected objects (%6d in cycles): %12s\n' % (total, cnt, _pp(sz)))
 
 
 #

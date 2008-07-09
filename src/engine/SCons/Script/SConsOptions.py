@@ -745,6 +745,13 @@ def Parser(version):
                   help="Profile SCons and put results in FILE.",
                   metavar="FILE")
 
+    op.add_option('--garbage',
+                  nargs=1,
+                  dest="garbage_file", default=None,
+                  action="store",
+                  help="Store garbage reference graph in FILE.",
+                  metavar="FILE")
+
     op.add_option('-q', '--question',
                   dest="question", default=False,
                   action="store_true",

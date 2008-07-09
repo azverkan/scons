@@ -535,6 +535,14 @@ class HeapmonitorStats(Stats):
 heapmonitor_stats = HeapmonitorStats()
 
 class GarbageStats(Stats):
+    def enable(self, outfp):
+        Stats.enable(self, outfp)
+        try:
+            import gc
+        except ImportError:
+            pass
+        else:
+            gc.disable()
     def do_append(self, label):
         pass
     def do_print(self):
@@ -672,6 +680,7 @@ def _set_debug_values(options):
         SCons.Heapmonitor.attach_default()
     if "garbage" in debug_values:
         garbage_stats.enable(sys.stdout)
+        SCons.Heapmonitor.graphviz_file = options.garbage_file
 
 def _create_path(plist):
     path = '.'
