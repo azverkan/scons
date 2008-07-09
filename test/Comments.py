@@ -108,7 +108,8 @@ from SCons.Comments import StripCComments
 print r"%s" % (StripCComments('ccomments.c'))
 """)
 
-test.run(chdir = subdirs[0], arguments = '-q -Q', stdout = r"""#include<stdio.h>intmain(void){intw=10+1;charx='\'';chary='\n';printf("not comment\n\\\"\\");printf("\"/\\/* not comment\"/\\/*\n");printf("'///*not comment*/'");printf("/");printf("/**\"not comment*/");return0;}
+test.run(chdir = subdirs[0], arguments = '-q -Q', stdout = r"""#include <stdio.h>
+intmain(void){intw=10+1;charx='\'';chary='\n';printf("not comment\n\\\"\\");printf("\"/\\/* not comment\"/\\/*\n");printf("'///*not comment*/'");printf("/");printf("/**\"not comment*/");return0;}
 """)
 
 
