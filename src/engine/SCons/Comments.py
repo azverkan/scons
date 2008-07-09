@@ -34,19 +34,21 @@ import SCons.Util
 
 whitespaces = '\t\r\n '
 
-def quoting_to_buf(txt, i, len_max, quot='"'):
-    """Extract quoted string from the buffer.
+def string_to_buf(txt, i, len_max, end_char='"'):
+    """Extract string from the buffer. The string starts at
+    the position 'i' in the buffer 'txt' and ends with the
+    sign 'end_char'.
 
-    Takes four arguments:
+    Function string_to_buf() takes four arguments:
     'txt' - file contents (as a string or list of characters)
     'i' - current position in the file (when calling
-          quoting_to_buf() 'i' *must* be an opening quote char)
+          string_to_buf() 'i' *must* be a string opening char)
     'len_max' - length of the string/list 'txt'
-    'quot' - quoting sign (default: '"')
+    'end_char' - sign closing the string (default: '"')
 
-    Returns a tuple: quoted string as a list of characters
+    Returns a tuple: extracted string as a list of characters
     and the current position in the buffer (first sign after
-    the quoted string).
+    the extracted string).
 
     This function is escaped-quotes sensitive."""
 
@@ -61,7 +63,7 @@ def quoting_to_buf(txt, i, len_max, quot='"'):
                 buf.append(txt[i])
                 i += 1
                 continue
-            elif txt[i] == quot:
+            elif txt[i] == end_char:
                 if metachars % 2:
                     buf.append(txt[i])
                     i += 1
@@ -101,10 +103,10 @@ def StripCode(filename, comment_char = '#'):
     while i < len_max:
         # omit double-quoted string
         if txt[i] == '"':
-            i = quoting_to_buf(txt, i, len_max)[1]
+            i = string_to_buf(txt, i, len_max)[1]
         # omit single-quoted string
         elif txt[i] == '\'':
-            i = quoting_to_buf(txt, i, len_max, '\'')[1]
+            i = string_to_buf(txt, i, len_max, '\'')[1]
         # add the comment to the buffer
         elif txt[i] == comment_char:
             while i < len_max and txt[i] != '\n':
@@ -139,11 +141,11 @@ def StripComments(filename, comment_char = '#'):
     while i < len_max:
         # add double-quoted string to the buffer
         if txt[i] == '"':
-            new_buf, i = quoting_to_buf(txt, i, len_max)
+            new_buf, i = string_to_buf(txt, i, len_max)
             buf.extend(new_buf)
         # add single-quoted string to the buffer
         elif txt[i] == '\'':
-            new_buf, i = quoting_to_buf(txt, i, len_max, '\'')
+            new_buf, i = string_to_buf(txt, i, len_max, '\'')
             buf.extend(new_buf)
         # strip the comment
         if txt[i] == comment_char:
@@ -186,7 +188,7 @@ def StripCCode(filename):
     while i < len_max:
         # omit double-quoted string
         if txt[i] == '"':
-            i = quoting_to_buf(txt, i, len_max)[1]
+            i = string_to_buf(txt, i, len_max)[1]
         # add '//' comment to the buffer
         if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
@@ -228,8 +230,13 @@ def StripCComments(filename):
     while i < len_max:
         # add double-quoted string to the buffer
         if txt[i] == '"':
-            new_buf, i = quoting_to_buf(txt, i, len_max)
+            new_buf, i = string_to_buf(txt, i, len_max)
             buf.extend(new_buf)
+        # add C preprocessor lines to the buffer
+        elif txt[i] == '#' and (i == 0 or txt[i-1] == '\n'):
+            new_buf, i = string_to_buf(txt, i, len_max, '\n')
+            buf.extend(new_buf)
+
         # strip '//' comment
         if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
@@ -272,7 +279,7 @@ def StripDCode(filename):
     while i < len_max:
         # omit double-quoted string
         if txt[i] == '"':
-            i = quoting_to_buf(txt, i, len_max)[1]
+            i = string_to_buf(txt, i, len_max)[1]
         # add '//' comment to the buffer
         if txt[i] == '/' and txt[i+1] == '/':
             while i < len_max and txt[i] != '\n':
@@ -326,7 +333,7 @@ def StripDComments(filename):
     while i < len_max:
         # add double-quoted string to the buffer
         if txt[i] == '"':
-            new_buf, i = quoting_to_buf(txt, i, len_max)
+            new_buf, i = string_to_buf(txt, i, len_max)
             buf.extend(new_buf)
         # strip /+ +/ comments
         if txt[i] == '/' and txt[i+1] == '+':
