@@ -64,11 +64,16 @@ def generate(env):
     import SCons.Tool.cc
     static_obj, shared_obj = SCons.Tool.createObjBuilders(env)
 
+    from SCons.Comments import StripCComments
+
     for suffix in CXXSuffixes:
         static_obj.add_action(suffix, SCons.Defaults.CXXAction)
         shared_obj.add_action(suffix, SCons.Defaults.ShCXXAction)
         static_obj.add_emitter(suffix, SCons.Defaults.StaticObjectEmitter)
         shared_obj.add_emitter(suffix, SCons.Defaults.SharedObjectEmitter)
+        static_obj.add_stripper(suffix, StripCComments)
+        shared_obj.add_stripper(suffix, StripCComments)
+
 
     SCons.Tool.cc.add_common_cc_variables(env)
 
