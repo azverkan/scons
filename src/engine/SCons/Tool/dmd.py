@@ -89,10 +89,14 @@ def generate(env):
 
     DAction = SCons.Action.Action('$DCOM', '$DCOMSTR')
 
+    from SCons.Comments import StripDComments
+
     static_obj.add_action('.d', DAction)
     shared_obj.add_action('.d', DAction)
     static_obj.add_emitter('.d', SCons.Defaults.StaticObjectEmitter)
     shared_obj.add_emitter('.d', SCons.Defaults.SharedObjectEmitter)
+    static_obj.add_stripper('.d', StripDComments)
+    shared_obj.add_stripper('.d', StripDComments)
 
     dc = env.Detect(['dmd', 'gdmd'])
     env['DC'] = dc
