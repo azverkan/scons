@@ -6,7 +6,7 @@ in this module should be faster than the old ones.
 
 At the moment this module is perfectly replaceable with SCons.Comments
 module (the tests for old SCons.Comments shall be passed by functions in
-CommentsRE module as well).
+CommentsRE module).
 
 At the moment:
  - all Strip*Code() functions work (but REs are not optimized yet),
@@ -143,7 +143,7 @@ def oneline_comment_regexp(chars):
     """Returns a regular expression that matches a region beginning with
     chars and ending with new line."""
 
-    return r"%s[^\n]*[\n]" % (chars)
+    return r"%s[^\n]*\n" % (chars)
 
 def comments_replace(x, char='#'):
     """Returns empty string for a string that starts with 'char' character
@@ -217,6 +217,13 @@ exclamation_code_pat = re.compile('|'.join([exclamation_comment]), re.DOTALL)
 
 
 def StripCCode(filename):
+    """Strip the code from the file and return comments.
+
+    Open the file 'filename', get the contents, strip the comments
+    and return source code.
+
+    Works for '//' and '/* */' comments."""
+
     try:
         contents = open(filename).read()
     except:
@@ -227,6 +234,13 @@ def StripCCode(filename):
 
 
 def StripCComments(filename):
+    """Strip C-like comments from the file and return source code.
+
+    Open the file 'filename', get the contents, strip the comments
+    and return source code.
+
+    Works for '//' and '/* */' comments."""
+
     try:
         contents = open(filename).read()
     except:
@@ -235,6 +249,13 @@ def StripCComments(filename):
     return whitespaces_filter(contents, preprocessor = True)
 
 def StripDCode(filename):
+    """Strip the code from the file and return comments.
+
+    Open the file 'filename', get the contents, strip the comments
+    and return source code.
+
+    Works for '//', '/* */' and '/+ +/' comments."""
+
     try:
         contents = open(filename).read()
     except:
@@ -243,6 +264,13 @@ def StripDCode(filename):
     return re.sub(whitespaces, '', ''.join(d_code_pat.findall(contents)))
 
 def StripDComments(filename):
+    """Strip C-like comments from the file and return source code.
+    
+    Open the file 'filename', get the contents, strip the comments
+    and return source code.
+    
+    Works for '//' and '/* */' comments."""
+
     try:
         contents = open(filename).read()
     except:
@@ -251,46 +279,56 @@ def StripDComments(filename):
     return whitespaces_filter(contents)
 
 
-def StripComments(filename):
+def StripComments(filename, comment_char = '#'):
+    """Strip the comments from the file and return source code.
+    
+    Open the file 'filename', get the contents, strip the comments
+    (treat everything after 'comment_char' sign as a comment),
+    and return source code.
+    
+    Default for 'comment_char' is '#'."""
+
     try:
         contents = open(filename).read()
     except:
         return ''
-    contents = hash_comments_pat.sub(hash_comments_replace, contents)
+
+    comment_char_pat = oneline_comment_regexp(comment_char)
+    comments_pat = re.compile('|'.join([single_quoted_string,
+                                         double_quoted_string,
+                                         comment_char_pat]), re.DOTALL)
+
+    def char_comments_replace(x):
+        return comments_replace(x, comment_char)
+
+    contents = comments_pat.sub(char_comments_replace, contents)
     return whitespaces_filter(contents)
 
-def StripCode(filename):
+
+def StripCode(filename, comment_char = '#'):
+    """Strip the source code from the file and return comments.
+
+    Open the file 'filename', get the contents, strip the code
+    (treat everything between 'comment_char' sign and a new line
+    as a comment), and return comments.
+
+    Default for 'comment_char' is '#'."""
+
     try:
         contents = open(filename).read()
     except:
         return ''
     contents = re.sub(quotes_pat, '', contents)
-    contents = ''.join(hash_code_pat.findall(contents))
+    comment_pat = oneline_comment_regexp(comment_char)
+    code_pat = re.compile('|'.join([comment_pat]), re.DOTALL)
+
+    contents = ''.join(code_pat.findall(contents))
     return re.sub(whitespaces, '', contents)
+
 
 def StripFortranComments(filename):
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = exclamation_comments_pat.sub(exclamation_comments_replace, contents)
-    return whitespaces_filter(contents)
+    return StripComments(filename, '!')
 
 def StripFortranCode(filename):
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = re.sub(quotes_pat, '', contents)
-    contents = ''.join(exclamation_code_pat.findall(contents))
-    return re.sub(whitespaces, '', contents)
+    return StripCode(filename, '!')
 
-
-#print StripCCode('c.c')
-#print StripCComments('c.c')
-#print StripDCode('d.d')
-#print StripDComments('d.d')
-#print StripCode('hello.py')
-#print StripComments('hello.py')
-#print StripFortranCode('hello.f90')
-#print StripFortranComments('hello.f90')
