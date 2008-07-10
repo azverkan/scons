@@ -273,7 +273,7 @@ test.run(chdir = subdirs[8], arguments = '-Q', stdout = r"""scons: `.' is up to 
 """)
 
 # comment added - should not rebuild
-test.write([subdirs[8], cfile], ccode + '// comment')
+test.write([subdirs[8], cfile], ccode + '// comment\n')
 
 test.run(chdir = subdirs[8], arguments = '-Q', stdout = r"""scons: `.' is up to date.
 """)
