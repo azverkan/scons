@@ -1,12 +1,17 @@
 """SCons.CommentsRE
 
-Alternative Comments module. This one is based on regular expressions
-instead of reading the file in while loops. When finished, functions
+Alternative Comments module. This one is partly based on regular expressions
+instead of reading whole file in while loops. When finished, functions
 in this module should be faster than the old ones.
 
+At the moment this module is perfectly replaceable with SCons.Comments
+module (the tests for old SCons.Comments shall be passed by functions in
+CommentsRE module as well).
+
 At the moment:
- - all Strip*Code() functions work (but REs are not optimized),
- - all Strip*Comments() functions simply don't work (see TODO list below)
+ - all Strip*Code() functions work (but REs are not optimized yet),
+ - all Strip*Comments() functions work (but REs are supported by
+   whitespaces_filter() function which uses while loops)
 """
 
 #
@@ -44,7 +49,89 @@ import sys
 # TODO: 
 #   - add RE which is able to strip whitespaces from the whole buffer
 #     but not from the quotings (change '   printf("    ");    ' into
-#     'printf("     ");').
+#     'printf("     ");'). At the moment whitespaces_filter() function
+#     does this.
+
+
+def string_to_buf(txt, i, len_max, end_char='"'):
+    """Extract string from the buffer. The string starts at
+    the position 'i' in the buffer 'txt' and ends with the
+    sign 'end_char'.
+
+    Function string_to_buf() takes four arguments:
+    'txt' - file contents (as a string or list of characters)
+    'i' - current position in the file (when calling
+          string_to_buf() 'i' *must* be a string opening char)
+    'len_max' - length of the string/list 'txt'
+    'end_char' - sign closing the string (default: '"')
+
+    Returns a tuple: extracted string as a list of characters
+    and the current position in the buffer (first sign after
+    the extracted string).
+
+    This function is escaped-quotes sensitive."""
+
+    metachars = 0
+    buf = []
+    buf.append(txt[i])
+    i += 1
+    try:
+        while i < len_max:
+            if txt[i] == '\\':
+                metachars += 1
+                buf.append(txt[i])
+                i += 1
+                continue
+            elif txt[i] == end_char:
+                if metachars % 2:
+                    buf.append(txt[i])
+                    i += 1
+                    metachars = 0
+                    continue
+                buf.append(txt[i])
+                i += 1
+                break
+            buf.append(txt[i])
+            i += 1
+            metachars = 0
+    except IndexError:
+        return buf, i
+    return buf, i
+
+
+def whitespaces_filter(txt, preprocessor=False):
+    """Strips the whitespaces (' ', '\t', '\n' and '\r') from the
+    buffer 'txt', but leaves the whitespaces within the quotes
+    (and within the lines that start with '#' sign when the 'preprocessor'
+    flag is True).
+
+    In other words whitespaces_filter() changes the string:
+    '\n \r \t" \n\"\r" \t' into: '" \n\"\r"'.
+
+    This function is escaped-quotes sensitive."""
+
+    i = 0
+    len_max = len(txt)
+    buf = []
+    whitespaces = ' \t\n\r'
+    while i < len_max:
+        # add double-quoted string to the buffer
+        if txt[i] == '"':
+            new_buf, i = string_to_buf(txt, i, len_max)
+            buf.extend(new_buf)
+        elif txt[i] == "'":
+            new_buf, i = string_to_buf(txt, i, len_max, "'")
+            buf.extend(new_buf)
+        # add single-quoted string to the buffer
+        elif preprocessor and txt[i] == '#':
+            new_buf, i = string_to_buf(txt, i, len_max, '\n')
+            buf.extend(new_buf)
+        else:
+            if not (txt[i] in whitespaces):
+                buf.append(txt[i])
+            i += 1
+
+    return ''.join(buf)
 
 def quot_regexp(c):
     """Returns a regular expression that matches a region delimited by c,
@@ -59,14 +146,14 @@ def oneline_comment_regexp(chars):
     return r"%s[^\n]*[\n]" % (chars)
 
 def comments_replace(x, char='#'):
-    """Returns empty string for a string that starts with backslash ('/')
+    """Returns empty string for a string that starts with 'char' character
     or the string itself otherwise."""
     x = x.group(0)
     if x.startswith(char):
         return ''
     return x
 
-def backslash_comments_replace(x):
+def slash_comments_replace(x):
     return comments_replace(x, '/')
 
 def exclamation_comments_replace(x):
@@ -144,10 +231,8 @@ def StripCComments(filename):
         contents = open(filename).read()
     except:
         return ''
-    contents = c_comments_pat.sub(backslash_comments_replace, contents)
-#    return re.sub("\"(\\.|[^\"])*\"", '', contents)
-#    return re.sub('[\t\n\r]| (?=.*?\"(\\.|[^\"])*\")', '', contents, re.DOTALL)
-    return re.sub(whitespaces, '', contents)
+    contents = c_comments_pat.sub(slash_comments_replace, contents)
+    return whitespaces_filter(contents, preprocessor = True)
 
 def StripDCode(filename):
     try:
@@ -157,15 +242,13 @@ def StripDCode(filename):
     contents = re.sub(quotes_pat, '', contents)
     return re.sub(whitespaces, '', ''.join(d_code_pat.findall(contents)))
 
-
-
 def StripDComments(filename):
     try:
         contents = open(filename).read()
     except:
         return ''
-    contents = d_comments_pat.sub(backslash_comments_replace, contents)
-    return re.sub(whitespaces, '', contents)
+    contents = d_comments_pat.sub(slash_comments_replace, contents)
+    return whitespaces_filter(contents)
 
 
 def StripComments(filename):
@@ -174,7 +257,7 @@ def StripComments(filename):
     except:
         return ''
     contents = hash_comments_pat.sub(hash_comments_replace, contents)
-    return re.sub(whitespaces, '', contents)
+    return whitespaces_filter(contents)
 
 def StripCode(filename):
     try:
@@ -190,8 +273,8 @@ def StripFortranComments(filename):
         contents = open(filename).read()
     except:
         return ''
-    stripped = exclamation_comments_pat.sub(exclamation_comments_replace, contents)
-    return re.sub(whitespaces, '', stripped)
+    contents = exclamation_comments_pat.sub(exclamation_comments_replace, contents)
+    return whitespaces_filter(contents)
 
 def StripFortranCode(filename):
     try:
