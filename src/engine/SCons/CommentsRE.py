@@ -135,19 +135,20 @@ def whitespaces_filter(txt, preprocessor=False):
 
 def quot_regexp(c):
     """Returns a regular expression that matches a region delimited by c,
-       inside which c may be escaped with a backslash."""
+    inside which c may be escaped with a backslash."""
 
     return r"%s(\\.|[^%s])*%s" % (c, c, c)
 
 def oneline_comment_regexp(chars):
     """Returns a regular expression that matches a region beginning with
-    chars and ending with new line."""
+    'chars' and ending with new line."""
 
     return r"%s[^\n]*\n" % (chars)
 
 def comments_replace(x, char='#'):
     """Returns empty string for a string that starts with 'char' character
     or the string itself otherwise."""
+
     x = x.group(0)
     if x.startswith(char):
         return ''
@@ -155,12 +156,6 @@ def comments_replace(x, char='#'):
 
 def slash_comments_replace(x):
     return comments_replace(x, '/')
-
-def exclamation_comments_replace(x):
-    return comments_replace(x, '!')
-
-def hash_comments_replace(x):
-    return comments_replace(x, '#')
 
 single_quoted_string = quot_regexp("'")
 double_quoted_string = quot_regexp('"')
@@ -170,8 +165,6 @@ whitespaces = "[ \n\r\t]"
 c_comment = r"/\*.*?\*/" # matches '/* ... */' comments
 d_comment = r"/\+.*?\+/" # matches '/+ ... +/' comments
 
-hash_comment = oneline_comment_regexp('#')
-exclamation_comment = oneline_comment_regexp('!')
 cxx_comment = oneline_comment_regexp('//')
 
 quotes_pat = re.compile('|'.join([single_quoted_string,
@@ -199,22 +192,6 @@ d_comments_pat = re.compile("|".join([single_quoted_string,
 d_code_pat = re.compile('|'.join([d_comment,
                                   c_comment,
                                   cxx_comment]), re.DOTALL)
-
-hash_comments_pat = re.compile('|'.join([single_quoted_string,
-                                         double_quoted_string,
-                                         hash_comment]), re.DOTALL)
-
-hash_code_pat = re.compile('|'.join([hash_comment]), re.DOTALL)
-
-
-# fortran
-exclamation_comments_pat = re.compile('|'.join([single_quoted_string,
-                                                double_quoted_string,
-                                                exclamation_comment]),
-                                                re.DOTALL)
-
-exclamation_code_pat = re.compile('|'.join([exclamation_comment]), re.DOTALL)
-
 
 def StripCCode(filename):
     """Strip the code from the file and return comments.
