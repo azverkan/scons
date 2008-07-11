@@ -143,6 +143,12 @@ def oneline_comment_regexp(chars):
 
     return r"%s[^\n]*\n" % (chars)
 
+def multiline_comment_regexp(begin_string, end_string):
+    """Returns a regular expression that matches a region beginning with
+    begin_string and ending with end_string."""
+
+    return r"%s.*?%s" % (begin_string, end_string)
+
 def comments_replace(x, char='#'):
     """Returns empty string for a string that starts with 'char' character
     or the string itself otherwise."""
@@ -157,8 +163,8 @@ double_quoted_string = quot_regexp('"')
 
 whitespaces = "[ \n\r\t]"
 
-c_comment = r"/\*.*?\*/" # matches '/* ... */' comments
-d_comment = r"/\+.*?\+/" # matches '/+ ... +/' comments
+c_comment = multiline_comment_regexp(r"/\*", r"\*/")
+d_comment = multiline_comment_regexp(r"/\+", r"\+/")
 
 cxx_comment = oneline_comment_regexp('//')
 
@@ -167,20 +173,29 @@ quotes_pat = re.compile('|'.join([single_quoted_string,
                                   re.DOTALL)
 
 def GenericStripCode(filename, patterns):
+    if type(patterns) != type((None, None)):
+        patterns = (patterns, )
+
     try:
         contents = open(filename).read()
     except:
         return ''
+
     pattern = re.compile('|'.join(patterns), re.DOTALL)
     contents = re.sub(quotes_pat, '', contents)
     contents = ''.join(pattern.findall(contents))
     return re.sub(whitespaces, '', contents)
 
 def GenericStripComments(filename, patterns, comment_first_char='/', preprocessor = False):
+
+    if type(patterns) != type((None, None)):
+        patterns = (patterns, )
+
     try:
         contents = open(filename).read()
     except:
         return ''
+
     pattern = re.compile('|'.join(patterns), re.DOTALL)
 
     def generic_replace(x):
@@ -239,61 +254,21 @@ def StripDComments(filename):
                                            cxx_comment))
 
 
-def StripComments(filename, comment_char = '#'):
-    """Strip the comments from the file and return source code.
-    
-    Open the file 'filename', get the contents, strip the comments
-    (treat everything after 'comment_char' sign as a comment),
-    and return source code.
-    
-    Default for 'comment_char' is '#'."""
-
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-
-    comment_char_pat = oneline_comment_regexp(comment_char)
-    comments_pat = re.compile('|'.join([single_quoted_string,
-                                         double_quoted_string,
-                                         comment_char_pat]), re.DOTALL)
-
-    def char_comments_replace(x):
-        return comments_replace(x, comment_char)
-
-    contents = comments_pat.sub(char_comments_replace, contents)
-    return whitespaces_filter(contents)
-
-
-def StripCode(filename, comment_char = '#'):
-    """Strip the source code from the file and return comments.
-
-    Open the file 'filename', get the contents, strip the code
-    (treat everything between 'comment_char' sign and a new line
-    as a comment), and return comments.
-
-    Default for 'comment_char' is '#'."""
-
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = re.sub(quotes_pat, '', contents)
-    comment_pat = oneline_comment_regexp(comment_char)
-    code_pat = re.compile('|'.join([comment_pat]), re.DOTALL)
-
-    contents = ''.join(code_pat.findall(contents))
-    return re.sub(whitespaces, '', contents)
-
-
 def StripFortranComments(filename):
-    return StripComments(filename, '!')
+    return GenericStripComments(filename, (single_quoted_string,
+                                           double_quoted_string,
+                                           oneline_comment_regexp('!')),
+                                             comment_first_char = '!')
 
 def StripFortranCode(filename):
-    return StripCode(filename, '!')
+    return GenericStripCode(filename, oneline_comment_regexp('!'))
 
 def StripHashComments(filename):
-    return StripComments(filename, '#')
+    return GenericStripComments(filename, (single_quoted_string,
+                                           double_quoted_string,
+                                           oneline_comment_regexp('#')),
+                                             comment_first_char = '#')
 
 def StripHashCode(filename):
-    return StripCode(filename, '#')
+    return GenericStripCode(filename, oneline_comment_regexp('#'))
+
