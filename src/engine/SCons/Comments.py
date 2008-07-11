@@ -30,7 +30,6 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 
 import sys
-import SCons.Util
 
 whitespaces = '\t\r\n '
 
@@ -165,6 +164,12 @@ def StripFortranComments(filename):
 
 def StripFortranCode(filename):
     return StripCode(filename, '!')
+
+def StripHashComments(filename):
+    return StripComments(filename, '#')
+
+def StripHashCode(filename):
+    return StripCode(filename, '#')
 
 def StripCCode(filename):
     """Strip the code from the file and return comments.
