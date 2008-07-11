@@ -1,8 +1,8 @@
 """SCons.CommentsRE
 
 Alternative Comments module. This one is partly based on regular expressions
-instead of reading whole file in while loops. When finished, functions
-in this module should be faster than the old ones.
+instead of reading whole file in while loops. Functions in this module
+are faster than the old ones.
 
 At the moment this module is perfectly replaceable with SCons.Comments
 module (the tests for old SCons.Comments shall be passed by functions in
@@ -39,9 +39,7 @@ At the moment:
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-
 import re
-import sys
 
 # based on Jeff Epler's idea:
 # http://mail.python.org/pipermail/python-list/2005-July/333370.html
@@ -154,9 +152,6 @@ def comments_replace(x, char='#'):
         return ''
     return x
 
-def slash_comments_replace(x):
-    return comments_replace(x, '/')
-
 single_quoted_string = quot_regexp("'")
 double_quoted_string = quot_regexp('"')
 
@@ -171,44 +166,39 @@ quotes_pat = re.compile('|'.join([single_quoted_string,
                                   double_quoted_string]),
                                   re.DOTALL)
 
-# strip CPP-like comments (applicable for C, C++, JAVA)
-c_comments_pat = re.compile("|".join([single_quoted_string,
-                                      double_quoted_string,
-                                      c_comment,
-                                      cxx_comment]),
-                                      re.DOTALL)
-
-c_code_pat = re.compile("|".join([c_comment,
-                                  cxx_comment]), re.DOTALL)
-
-
-# strip D-like comments
-d_comments_pat = re.compile("|".join([single_quoted_string,
-                                      double_quoted_string,
-                                      d_comment,
-                                      c_comment,
-                                      cxx_comment]), re.DOTALL)
-
-d_code_pat = re.compile('|'.join([d_comment,
-                                  c_comment,
-                                  cxx_comment]), re.DOTALL)
-
-def StripCCode(filename):
-    """Strip the code from the file and return comments.
-
-    Open the file 'filename', get the contents, strip the comments
-    and return source code.
-
-    Works for '//' and '/* */' comments."""
-
+def GenericStripCode(filename, patterns):
     try:
         contents = open(filename).read()
     except:
         return ''
+    pattern = re.compile('|'.join(patterns), re.DOTALL)
     contents = re.sub(quotes_pat, '', contents)
-    contents = ''.join(c_code_pat.findall(contents))
+    contents = ''.join(pattern.findall(contents))
     return re.sub(whitespaces, '', contents)
 
+def GenericStripComments(filename, patterns, comment_first_char='/', preprocessor = False):
+    try:
+        contents = open(filename).read()
+    except:
+        return ''
+    pattern = re.compile('|'.join(patterns), re.DOTALL)
+
+    def generic_replace(x):
+        return comments_replace(x, comment_first_char)
+
+    contents = pattern.sub(generic_replace, contents)
+    return whitespaces_filter(contents, preprocessor)
+
+
+def StripCCode(filename):
+    """Strip the code from the file and return comments.
+
+    Open the file 'filename', get the contents, strip the source code
+    and return comments.
+
+    Works for '//' and '/* */' comments."""
+
+    return GenericStripCode(filename, (c_comment, cxx_comment))
 
 def StripCComments(filename):
     """Strip C-like comments from the file and return source code.
@@ -218,42 +208,35 @@ def StripCComments(filename):
 
     Works for '//' and '/* */' comments."""
 
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = c_comments_pat.sub(slash_comments_replace, contents)
-    return whitespaces_filter(contents, preprocessor = True)
+    return GenericStripComments(filename, (single_quoted_string,
+                                           double_quoted_string,
+                                           c_comment,
+                                           cxx_comment), preprocessor = True)
 
 def StripDCode(filename):
     """Strip the code from the file and return comments.
 
-    Open the file 'filename', get the contents, strip the comments
-    and return source code.
+    Open the file 'filename', get the contents, strip the code
+    and return the comments.
 
     Works for '//', '/* */' and '/+ +/' comments."""
 
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = re.sub(quotes_pat, '', contents)
-    return re.sub(whitespaces, '', ''.join(d_code_pat.findall(contents)))
+    return GenericStripCode(filename, (d_comment, c_comment, cxx_comment))
+
 
 def StripDComments(filename):
-    """Strip C-like comments from the file and return source code.
+    """Strip D-like comments from the file and return source code.
     
     Open the file 'filename', get the contents, strip the comments
     and return source code.
     
-    Works for '//' and '/* */' comments."""
+    Works for '//', '/* */' and '/+ +/' comments."""
 
-    try:
-        contents = open(filename).read()
-    except:
-        return ''
-    contents = d_comments_pat.sub(slash_comments_replace, contents)
-    return whitespaces_filter(contents)
+    return GenericStripComments(filename, (single_quoted_string,
+                                           double_quoted_string,
+                                           d_comment,
+                                           c_comment,
+                                           cxx_comment))
 
 
 def StripComments(filename, comment_char = '#'):
@@ -309,3 +292,8 @@ def StripFortranComments(filename):
 def StripFortranCode(filename):
     return StripCode(filename, '!')
 
+def StripHashComments(filename):
+    return StripComments(filename, '#')
+
+def StripHashCode(filename):
+    return StripCode(filename, '#')
