@@ -26,6 +26,7 @@ __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 import unittest
 import TestCmd
 import tempfile
+import gc
 
 from os import tempnam, remove
 from SCons.Heapmonitor import *
@@ -311,13 +312,106 @@ class TrackClassTestCase(unittest.TestCase):
         assert 'Baz' in tracked_index
         assert tracked_index['Baz'][0].ref() == foo
 
+class GarbageTestCase(unittest.TestCase):
+    def setUp(self):
+        gc.collect()
+        gc.disable()
+        gc.set_debug(gc.DEBUG_SAVEALL)
+
+    def tearDown(self):
+        gc.enable()
+
+    def test_findgarbage(self):
+        """Test garbage annotation.
+        """
+        foo = Foo()
+        bar = Bar()
+
+        idfoo = id(foo)
+        idbar = id(bar)
+
+        foo.next = bar
+        bar.prev = foo
+
+        del foo
+        del bar
+
+        cnt, garbage = find_garbage()
+
+        assert cnt == len(gc.garbage)
+        assert cnt >= 2
+        
+        gfoo = [x for x in garbage if x.id == idfoo]
+        assert len(gfoo) == 1
+        gfoo = gfoo[0]
+        assert gfoo.type == 'Foo'
+        assert gfoo.size > 0
+        assert gfoo.str != ''
+
+        gbar = [x for x in garbage if x.id == idbar]
+        assert len(gbar) == 1
+        gbar = gbar[0]
+        assert gbar.type == 'Bar'
+        assert gbar.size > 0
+        assert gbar.str != ''
+
+    def test_noprune(self):
+        """Test pruning of reference graph.
+        """
+        foo = Foo()
+        bar = Bar()
+
+        foo.parent = foo
+        foo.leaf = bar
+
+        idb = id(bar)
+
+        del foo
+        del bar
+
+        cnt1, garbage1 = find_garbage(prune=0)
+        cnt2, garbage2 = find_garbage(prune=1)
+
+        assert cnt1 == cnt2
+        assert len(garbage1) > len(garbage2)
+        
+        gbar = [x for x in garbage1 if x.id == idb]
+        assert len(gbar) == 1
+        gbar = [x for x in garbage2 if x.id == idb]
+        assert len(gbar) == 0
+
+    def test_edges(self):
+        """Test referent identification.
+        """
+        foo = Foo()
+        bar = Bar()
+
+        idfoo = id(foo)
+        idfd = id(foo.__dict__)
+        idbar = id(bar)
+        idbd = id(bar.__dict__)
+
+        foo.next = bar
+        bar.prev = foo
+
+        del foo
+        del bar
+
+        gc.collect()
+        e = get_edges(gc.garbage[:])
+
+        # TODO: insert labels when implemented
+        assert (idfoo, idfd, '') in e
+        assert (idfd, idbar, '') in e
+        assert (idbar, idbd, '') in e
+        assert (idbd, idfoo, '') in e        
 
 if __name__ == "__main__":
     suite = unittest.TestSuite()
     tclasses = [ TrackObjectTestCase,
                  TrackClassTestCase,
-                 SnapshotTestCase
-                 # RecursionLevelTestCase,
+                 SnapshotTestCase,
+                 GarbageTestCase
                ]
     for tclass in tclasses:
         names = unittest.getTestCaseNames(tclass, 'test_')

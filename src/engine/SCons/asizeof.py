@@ -67,8 +67,10 @@
 
    The basic and item sizes are obtained from the __basicsize__
    resp. __itemsize__ attributes of the (type of the) object.
-   Where necessary (for sequence objects), a zero item size is
-   replaced by the size of the C typedef of the item.
+   The overhead for Python's garbage collector (gc) is included
+   in the basic size of gc managed objects.  Where necessary (for
+   sequence objects), a zero item size is replaced by the size of
+   the C typedef of the item.
 
    The (byte)code size of objects as classes, functions, methods,
    modules, etc. can be included, optionally except for builtin
@@ -129,7 +131,7 @@ from sys        import modules, getrecursionlimit, stdout
 import types    as     Types
 import weakref  as     Weakref
 
-__version__ = '3.36 (June 19, 2008)'
+__version__ = '4.0 (July 10, 2008)'
 __all__     = ['adict', 'asized', 'asizeof', 'asizesof',
                'Asized', 'Asizer',  # classes
                'basicsize', 'flatsize', 'itemsize', 'leng', 'refs']
@@ -143,11 +145,12 @@ else:  # treat this very module as builtin
 
  # sizes of some C types
  # XXX len(pack(T, 0)) == Struct(T).size == calcsize(T)
-_sizeof_Cint   = len(pack('i', 0))  # sizeof(int)
-_sizeof_Clong  = len(pack('l', 0))  # sizeof(long)
-_sizeof_Cshort = len(pack('h', 0))  # sizeof(short)
-_sizeof_Cssize = len(pack('P', 0))  # sizeof(ssize_t)
-_sizeof_Cvoidp = len(pack('P', 0))  # sizeof(void*)
+_sizeof_Cint    = len(pack('i', 0))  # sizeof(int)
+_sizeof_Clong   = len(pack('l', 0))  # sizeof(long)
+_sizeof_Cshort  = len(pack('h', 0))  # sizeof(short)
+_sizeof_Cssize  = len(pack('P', 0))  # sizeof(ssize_t)
+_sizeof_Cvoidp  = len(pack('P', 0))  # sizeof(void*)
+_sizeof_Cdouble = len(pack('d', 0))  # sizeof(double)
 try:  # C typedef digit for multi-precision int (or long)
    _sizeof_Cdigit = long.__itemsize__
 except NameError:  # no long in Python 3.0
@@ -166,6 +169,14 @@ _sizeof_CPyModuleObject = _sizeof_Chead     +       _sizeof_Cvoidp  # sizeof(PyM
 _sizeof_CPyDictEntry    = _sizeof_Cssize + (2 * _sizeof_Cvoidp)  # sizeof(PyDictEntry)
 _sizeof_Csetentry       = _sizeof_Cvoidp + _sizeof_Clong         # sizeof(setentry)
 
+_Py_PFLAGS_HAVE_GC      = 1 << 14  # Py_TPFLAGS_HAVE_GC
+try:  # size of gc overhead, sizeof(PyGC_Head))
+    import _testcapi as t
+    _sizeof_CPyGC_Head = t.SIZEOF_PYGC_HEAD  # new in Python 2.6+
+    del t
+except (ImportError, AttributeError):  # sizeof(PyGC_Head)), aligned
+    _sizeof_CPyGC_Head = ((_sizeof_Cvoidp * 2) + _sizeof_Cssize +
+                           _sizeof_Cdouble - 1) & ~(_sizeof_Cdouble - 1)
 
  # compatibility functions for more uniform
  # behavior across Python version 2.2 thu 3.0
@@ -217,8 +228,11 @@ except ImportError:
 def _basicsize(t, base=0):
     '''Get non-zero basicsize of type.
     '''
-     # at the default size
-    return max(getattr(t, '__basicsize__', 0), base)
+     # get the size plus gc overhead
+    s = max(getattr(t, '__basicsize__', 0), base)
+    if getattr(t, '__flags__', 0) & _Py_PFLAGS_HAVE_GC:
+        s += _sizeof_CPyGC_Head
+    return s
 
 def _derive_typedef(typ):
     '''Return single, existing super type typedef or None.

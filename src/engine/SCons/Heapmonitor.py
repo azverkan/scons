@@ -652,7 +652,9 @@ def _visualize_gc_graphviz(garbage, metagarbage, edges, file):
         label = _trunc(g.str, 48).replace('"', "'")
         extra = ''
         if g.type == 'instancemethod':
-            extra = ', color = red'
+            extra = ', color=red'
+        elif g.type == 'frame':
+            extra = ', color=orange'
         file.write('    "X%08x" [ label = "%s\\n%s" %s ];\n' % \
             (id(n), label, g.type, extra))
     for (i, j, l) in edges:
@@ -673,7 +675,7 @@ def eliminate_leafs(graph, get_referents, get_referrers=None, debug=0):
             result.append(n)
     return result
 
-def get_edges(graph, get_referents):
+def get_edges(graph, get_referents=gc.get_referents):
     """
     Compute the edges for the reference graph.
     The function returns a set of tuples (id(a), id(b), ref) if a
@@ -685,18 +687,14 @@ def get_edges(graph, get_referents):
         refset = set([id(x) for x in get_referents(n)])
         for ref in refset.intersection(idset):
             label = ''
-            # FIXME The commented out code below shall find the referent's name
-            # with dir and getattr. However, for some objects (like frames) this
-            # will change/delete references of the referred object and breaks
-            # cycles. Find a safe way to extract the referent name.
-            #try:
-            #    label = [a for a in dir(n) if id(getattr(n, a)) == ref][0]
-            #except:
-            #    label = ''
+            for (k, v) in inspect.getmembers(n):
+                if id(v) == ref:
+                    label = k
+                    break
             edges.add((id(n), ref, label))
     return edges
 
-def find_garbage(sizer, graphfile=None, prune=1):
+def find_garbage(sizer=None, graphfile=None, prune=1):
     """
     Let the garbage collector identify ref cycles.
     First, the garbage collector runs and saves the garbage into gc.garbage. The
@@ -707,6 +705,9 @@ def find_garbage(sizer, graphfile=None, prune=1):
     format.
     The total number of garbage and the annotated cycle elements are returned.
     """
+    if not sizer:
+        sizer = SCons.asizeof.Asizer()
+
     gc.set_debug(gc.DEBUG_SAVEALL)
     gc.collect()
 
@@ -728,9 +729,7 @@ def find_garbage(sizer, graphfile=None, prune=1):
         g.id = id(obj)
         try:
             g.type = obj.__class__.__name__
-        except AttributeError:
-            g.type = type(obj)
-        except ReferenceError:
+        except (AttributeError, ReferenceError):
             g.type = type(obj)
         try:
             g.str = _trunc(str(obj), 128)
