@@ -173,6 +173,10 @@ quotes_pat = re.compile('|'.join([single_quoted_string,
                                   re.DOTALL)
 
 def GenericStripCode(filename, patterns):
+    """GenericStripCode() function returns strings that fit
+    regular expressions defined in 'patterns' tuple from
+    the 'filename' file."""
+
     if type(patterns) != type((None, None)):
         patterns = (patterns, )
 
@@ -186,10 +190,25 @@ def GenericStripCode(filename, patterns):
     contents = ''.join(pattern.findall(contents))
     return re.sub(whitespaces, '', contents)
 
-def GenericStripComments(filename, patterns, comment_first_char='/', preprocessor = False):
+def GenericStripComments(filename, patterns, comment_first_chars=('/',), preprocessor = False):
+    """GenericStripComments() function returns contents
+    of the 'filename' file except of strings that fit regular
+    expressions defined in 'patterns' tuple.
+
+    'comment_first_chars' is a tuple that defines signs that comments
+    start with. For C-like comments comment_first_chars is equal to
+    ('/',), because '/' sign fits for '/* ... */' comments as well
+    as '// ...' comments.
+
+    When 'preprocessor' is True GenericStripComments won't strip
+    whitespaces from the lines that start with '#' sign.
+    """
 
     if type(patterns) != type((None, None)):
         patterns = (patterns, )
+
+    if type(comment_first_chars) != type((None, None)):
+        comment_first_chars = (comment_first_chars, )
 
     try:
         contents = open(filename).read()
@@ -198,10 +217,12 @@ def GenericStripComments(filename, patterns, comment_first_char='/', preprocesso
 
     pattern = re.compile('|'.join(patterns), re.DOTALL)
 
-    def generic_replace(x):
-        return comments_replace(x, comment_first_char)
+    for first_char in comment_first_chars:
+        def generic_replace(x):
+            return comments_replace(x, first_char)
 
-    contents = pattern.sub(generic_replace, contents)
+        contents = pattern.sub(generic_replace, contents)
+
     return whitespaces_filter(contents, preprocessor)
 
 
@@ -258,7 +279,7 @@ def StripFortranComments(filename):
     return GenericStripComments(filename, (single_quoted_string,
                                            double_quoted_string,
                                            oneline_comment_regexp('!')),
-                                             comment_first_char = '!')
+                                             comment_first_chars = '!')
 
 def StripFortranCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('!'))
@@ -267,7 +288,7 @@ def StripHashComments(filename):
     return GenericStripComments(filename, (single_quoted_string,
                                            double_quoted_string,
                                            oneline_comment_regexp('#')),
-                                             comment_first_char = '#')
+                                             comment_first_chars = '#')
 
 def StripHashCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('#'))
