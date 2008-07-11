@@ -191,8 +191,8 @@ test.write([subdirs[4], pyfile], pycode)
 
 test.write([subdirs[4], 'SConstruct'],
       """
-from SCons.Comments import StripComments
-print r"%s" % (StripComments('pycomments.py'))
+from SCons.Comments import StripHashComments
+print r"%s" % (StripHashComments('pycomments.py'))
 """)
 
 test.run(chdir = subdirs[4], arguments = '-q -Q', stdout = r"""print"#! not comment\\\\\""print'#! not comment'print'"#! not comment"'print"'#! not comment'"
@@ -204,8 +204,8 @@ test.write([subdirs[5], pyfile], pycode)
 
 test.write([subdirs[5], 'SConstruct'],
       """
-from SCons.Comments import StripCode
-print r"%s" % (StripCode('pycomments.py'))
+from SCons.Comments import StripHashCode
+print r"%s" % (StripHashCode('pycomments.py'))
 """)
 
 
