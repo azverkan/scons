@@ -499,63 +499,108 @@ class MemStats:
         """
         self.tracked_index = tracked_index
         self.footprint = footprint
+        self.sorted = []
     
-    def load(self, fname):
+    def load(self, file):
         """
         Load the data from a dump file.
         """
-        log = open(fname, 'r')
-        self.tracked_index = cPickle.load(log)
-        self.footprint = cPickle.load(log)
+        self.tracked_index = cPickle.load(file)
+        self.footprint = cPickle.load(file)
 
-    def dump(self, fname):
+    def dump(self, file, close=1):
         """
         Dump the logged data to a file.
         """
-        log = open(fname, 'w')
-        cPickle.dump(tracked_index, log)
-        cPickle.dump(footprint, log)
-        log.close()
+        cPickle.dump(tracked_index, file)
+        cPickle.dump(footprint, file)
+        if close:
+            file.close()
+
+    def _init_sort(self):
+        """
+        Prepare the data to be sorted.
+        If not yet sorted, import all tracked objects from the tracked index.
+        Extend the tracking information by implicit information to make
+        sorting easier.
+        """
+        if not self.sorted:
+            # Identify the snapshot that tracked the largest amount of memory.
+            tmax = None
+            maxsize = 0
+            for fp in self.footprint:
+                if fp.tracked_total > maxsize:
+                    tmax = fp.timestamp
+            for key in self.tracked_index.iterkeys():
+                for to in self.tracked_index[key]:
+                    to.classname = key
+                    to.size = to.get_max_size()
+                    to.tsize = to.get_size_at_time(tmax)
+                self.sorted.extend(self.tracked_index[key])
 
     def sort_stats(self, *args):
-        # TODO
-        pass
+        """
+        Sort the tracked objects based on various criteria.
+        """
+
+        criteria = ('classname', 'tsize', 'birth', 'death', 
+                    'name', 'repr', 'size')
+
+        if not set(criteria).issuperset(set(args)):
+            raise ValueError, "Invalid sort criteria"
+
+        if not args:
+            args = criteria
+
+        def _sort(a, b, crit=args):
+            for c in crit:
+                res = cmp(getattr(a,c), getattr(b,c))
+                if res:
+                    if c in ('tsize', 'size', 'death'): 
+                        return -res
+                    return res
+            return 0
+
+        if not self.sorted:
+            self._init_sort()
+
+        self.sorted.sort(_sort)
+
+        return self
+
+    def reverse_order(self):
+        """
+        Reverse the order of the tracked instance index.
+        """
+        if not self.sorted:
+            self._init_sort()
+        self.sorted.reverse()
+        return self
+
 
     def diff_stats(self, stats):
         # TODO
         return self
         
-    def print_stats(self, file=sys.stdout, full=0):
+    def print_stats(self, percent=1.0, file=sys.stdout):
         """
-        Write tracked objects by class to stdout.
+        Write tracked objects to stdout.
         """
+        if not self.sorted:
+            self.sort_stats()
 
-        # Identify the snapshot that tracked the largest amount of memory.
-        tmax = None
-        maxsize = 0
-        for fp in self.footprint:
-            if fp.tracked_total > maxsize:
-                tmax = fp.timestamp
+        if percent < 1.0:
+            self.sorted = self.sorted[:int(len(self.sorted)*percent)]
 
+        # Emit per-instance data
+        for to in self.sorted:
+            to.print_text(file, full=1)
+
+        # Emit class summaries for each snapshot
         classlist = self.tracked_index.keys()
         classlist.sort()
         summary = []
 
-        # Emit per-instance data
-        for classname in classlist:
-            if full:
-                file.write('\n%s:\n' % classname)
-            sum = 0
-            sorted_index = self.tracked_index[classname]
-            sortsize = lambda i, j: \
-                (i.get_size_at_time(tmax) > j.get_size_at_time(tmax)) and -1 or \
-                (i.get_size_at_time(tmax) < j.get_size_at_time(tmax)) and 1 or 0
-            sorted_index.sort(sortsize)
-            file.write('%s:\n' % classname)
-            for to in sorted_index:
-                to.print_text(file, full=1)
-
-        # Emit class summaries for each snapshot
         file.write('---- SUMMARY '+'-'*66+'\n')
         for fp in self.footprint:
             file.write('%-35s %11s %12s %12s %5s\n' % \
@@ -581,19 +626,19 @@ class MemStats:
                     (_trunc(classname, 33), active, _pp(sum), _pp(avg), pct))
         file.write('-'*79+'\n')
 
-def dump_stats(fname):
+def dump_stats(file, close=1):
     """
     Dump the logged data to a file.
     """
     stats = MemStats(tracked_index, footprint)
-    stats.dump(fname)
+    stats.dump(file, close)
 
-def print_stats(file=sys.stdout, full=0):
+def print_stats(file=sys.stdout):
     """
     Write tracked objects by class to stdout.
     """
     stats = MemStats(tracked_index, footprint)
-    stats.print_stats(file, full)
+    stats.print_stats(file=file)
 
 def print_snapshots(file=sys.stdout):
     """

@@ -527,10 +527,16 @@ class MemStats(Stats):
 memory_stats = MemStats()
 
 class HeapmonitorStats(Stats):
+    def enable(self, outfp, profile=None):
+        Stats.enable(self, outfp)
+        self.profile = profile
     def do_append(self, label):
         pass
     def do_print(self):
-        SCons.Heapmonitor.print_stats(self.outfp)
+        if self.profile:
+            SCons.Heapmonitor.dump_stats(open(self.profile, 'w'))
+        else:
+            SCons.Heapmonitor.print_stats(self.outfp)
 
 heapmonitor_stats = HeapmonitorStats()
 
@@ -676,7 +682,7 @@ def _set_debug_values(options):
     if "tree" in debug_values:
         options.tree_printers.append(TreePrinter())
     if "heapmonitor" in debug_values:
-        heapmonitor_stats.enable(sys.stdout)
+        heapmonitor_stats.enable(sys.stdout, options.heapmonitor_file)
         SCons.Heapmonitor.attach_default()
     if "garbage" in debug_values:
         garbage_stats.enable(sys.stdout)

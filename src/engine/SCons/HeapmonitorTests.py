@@ -27,8 +27,8 @@ import unittest
 import TestCmd
 import tempfile
 import gc
+import StringIO
 
-from os import tempnam, remove
 from SCons.Heapmonitor import *
 
 class Foo:
@@ -117,41 +117,6 @@ class TrackObjectTestCase(unittest.TestCase):
 
         assert tracked_objects[idfoo].ref() is not None
         assert tracked_objects[idbar].ref() is None
-
-    def test_dump(self):
-        """Test serialization of log data.
-        """
-        foo = Foo()
-
-        track_object(foo, resolution_level=4)
-        create_snapshot('Footest')
-
-        f1 = tempfile.TemporaryFile()
-        print_stats(file=f1)
-
-        tmp = tempnam() # FIXME tempnam is deprecated
-        dump_stats(tmp)
-
-        clear()
-
-        stats = MemStats()
-        assert stats.tracked_index is None
-        assert stats.footprint is None
-        stats.load(tmp)
-        remove(tmp)
-        assert 'Foo' in stats.tracked_index
-
-        f2 = tempfile.TemporaryFile()
-        stats.print_stats(file=f2)
-
-        f1.seek(0)
-        f2.seek(0)
-
-        assert f1.read() == f2.read()
-
-        f1.close()
-        f2.close()
-
 
     def test_recurse(self):
         """Test recursive sizing and saving of referents.
@@ -312,6 +277,64 @@ class TrackClassTestCase(unittest.TestCase):
         assert 'Baz' in tracked_index
         assert tracked_index['Baz'][0].ref() == foo
 
+class LogTestCase(unittest.TestCase):
+
+    def setUp(self):
+        detach_all()
+
+    def test_dump(self):
+        """Test serialization of log data.
+        """
+        foo = Foo()
+        foo.data = range(1000)
+        bar = Bar()
+
+        track_object(foo, resolution_level=4)
+        track_object(bar)
+
+        create_snapshot('Footest')
+
+        f1 = StringIO.StringIO()
+        print_stats(file=f1)
+
+        tmp = StringIO.StringIO()
+        dump_stats(tmp, close=0)
+
+        clear()
+
+        stats = MemStats()
+        assert stats.tracked_index is None
+        assert stats.footprint is None
+        tmp.seek(0)
+        stats.load(tmp)
+        tmp.close()
+        assert 'Foo' in stats.tracked_index
+
+        f2 = StringIO.StringIO()
+        stats.print_stats(file=f2)
+
+        assert f1.getvalue() == f2.getvalue()
+
+        # Test sort_stats and reverse_order
+        stats.sort_stats('size')
+        assert stats.sorted[0].classname == 'Foo'
+        stats.reverse_order()
+        assert stats.sorted[0].classname == 'Bar'
+        stats.sort_stats('classname', 'birth')
+        assert stats.sorted[0].classname == 'Bar'
+        self.assertRaises(ValueError, stats.sort_stats, 'name', 42, 'classn')
+
+        # Test partial printing
+        f3 = StringIO.StringIO()
+        stats.print_stats(percent=0.5,file=f3)
+        assert f3.getvalue()[:12] == '__main__.Bar'
+        assert len(f3.getvalue()) < len(f1.getvalue())
+
+        f1.close()
+        f2.close()
+        f3.close()
+
+
 class GarbageTestCase(unittest.TestCase):
     def setUp(self):
         gc.collect()
@@ -411,7 +434,8 @@ if __name__ == "__main__":
     tclasses = [ TrackObjectTestCase,
                  TrackClassTestCase,
                  SnapshotTestCase,
-                 GarbageTestCase
+                 GarbageTestCase,
+                 LogTestCase
                ]
     for tclass in tclasses:
         names = unittest.getTestCaseNames(tclass, 'test_')

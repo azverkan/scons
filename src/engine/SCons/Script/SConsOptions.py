@@ -745,6 +745,13 @@ def Parser(version):
                   help="Profile SCons and put results in FILE.",
                   metavar="FILE")
 
+    op.add_option('--heapprofile',
+                  nargs=1,
+                  dest="heapmonitor_file", default=None,
+                  action="store",
+                  help="Profile SCons heap usage and put results in FILE.",
+                  metavar="FILE")
+
     op.add_option('--garbage',
                   nargs=1,
                   dest="garbage_file", default=None,
