@@ -4,9 +4,10 @@ Alternative Comments module. This one is partly based on regular expressions
 instead of reading whole file in while loops. Functions in this module
 are faster than the old ones.
 
-At the moment this module is perfectly replaceable with SCons.Comments
-module (the tests for old SCons.Comments shall be passed by functions in
-CommentsRE module).
+At the moment this module *is not* perfectly replaceable with SCons.Comments
+module. Functions names are the same, but the behaviour of StripCComment
+especially is not. The differences are easily traceable by diff'ing 
+test/Comments.py and test/CommentsRE.py files.
 
 At the moment:
  - all Strip*Code() functions work (but REs are not optimized yet),
@@ -40,6 +41,8 @@ At the moment:
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import re
+from random import sample
+from string import digits, letters
 
 # based on Jeff Epler's idea:
 # http://mail.python.org/pipermail/python-list/2005-July/333370.html
@@ -50,6 +53,10 @@ import re
 #     'printf("     ");'). At the moment whitespaces_filter() function
 #     does this.
 
+def generate_random_string(length = 10):
+    """Return random string compounded of letters [a-zA-Z] and digits
+    [1-9] of length 'length'."""
+    return ''.join(sample(digits+letters, length))
 
 def string_to_buf(txt, i, len_max, end_char='"'):
     """Extract string from the buffer. The string starts at
@@ -117,12 +124,14 @@ def whitespaces_filter(txt, preprocessor=False):
         if txt[i] == '"':
             new_buf, i = string_to_buf(txt, i, len_max)
             buf.extend(new_buf)
+        # add single-quoted string to the buffer
         elif txt[i] == "'":
             new_buf, i = string_to_buf(txt, i, len_max, "'")
             buf.extend(new_buf)
-        # add single-quoted string to the buffer
+        # add C-preprocessor lines to the buffer (with whitespaces)
         elif preprocessor and txt[i] == '#':
             new_buf, i = string_to_buf(txt, i, len_max, '\n')
+            buf.extend('\n')
             buf.extend(new_buf)
         else:
             if not (txt[i] in whitespaces):
@@ -149,12 +158,21 @@ def multiline_comment_regexp(begin_string, end_string):
 
     return r"%s.*?%s" % (begin_string, end_string)
 
-def comments_replace(x, char='#'):
+def comments_replace(x, char='#', preprocessor = False, randomstring = ''):
     """Returns empty string for a string that starts with 'char' character
-    or the string itself otherwise."""
+    or the string itself otherwise.
+
+    If preprocessor is True, return 'randomstring' for every string that
+    starts with '/*'"""
 
     x = x.group(0)
-    if x.startswith(char):
+    # Replace the '/* ... */' comments with 'randomstring' string.
+    # Later on, after stripping the whitespaces we can change
+    # the 'randomstring' strings into ' ' to simulate the behavior
+    # of C preprocessor.
+    if preprocessor and x.startswith('/*'):
+        return randomstring
+    elif x.startswith(char):
         return ''
     return x
 
@@ -215,15 +233,22 @@ def GenericStripComments(filename, patterns, comment_first_chars=('/',), preproc
     except:
         return ''
 
+    if preprocessor:
+        randomstring = generate_random_string()
+    else:
+        randomstring = ''
+
     pattern = re.compile('|'.join(patterns), re.DOTALL)
 
     for first_char in comment_first_chars:
         def generic_replace(x):
-            return comments_replace(x, first_char)
-
+            return comments_replace(x, first_char, preprocessor, randomstring)
         contents = pattern.sub(generic_replace, contents)
 
-    return whitespaces_filter(contents, preprocessor)
+    contents = whitespaces_filter(contents, preprocessor)
+    if preprocessor:
+        return re.sub(randomstring, ' ', contents)
+    return contents
 
 
 def StripCCode(filename):
@@ -292,4 +317,3 @@ def StripHashComments(filename):
 
 def StripHashCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('#'))
-
