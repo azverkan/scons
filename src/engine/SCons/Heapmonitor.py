@@ -38,6 +38,9 @@ from __future__ import nested_scopes
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+# Get set type in Python 2.2/2.3.
+import SCons.compat
+
 import sys
 import time
 
@@ -46,10 +49,9 @@ import new
 import inspect
 import cPickle
 import gc
-import tempfile
 
 import SCons.asizeof
-import SCons.Debug
+from SCons.Debug import memory
 
 # Dictionaries of TrackedObject objects associated with the actual objects that
 # are tracked. 'tracked_index' uses the class name as the key and associates a
@@ -177,11 +179,16 @@ def _pp(i):
 
 def _get_timestamp(t):
     """
-    Get a friendly timestamp (as returned by time.time) represented as a string.
+    Get a friendly timestamp represented as a string.
     """
-    rt = t - _local_start
-    h, m, s = int(rt / 3600), int(rt / 60 % 60), rt % 60
+    h, m, s = int(t / 3600), int(t / 60 % 60), t % 60
     return "%02d:%02d:%05.2f" % (h, m, s)
+
+def _get_time():
+    """
+    Get a timestamp relative to the program start time.
+    """
+    return time.time() - _local_start
 
 class TrackedObject(object):
     """
@@ -200,7 +207,7 @@ class TrackedObject(object):
         self.id = id(instance)
         self.repr = ''
         self.name = instance.__class__
-        self.birth = time.time()
+        self.birth = _get_time()
         self.death = None
         self._resolution_level = resolution_level
 
@@ -336,11 +343,9 @@ class TrackedObject(object):
         does nothing (self.death stays None).
         """
         try:
-            import time
-        except ImportError:
+            self.death = _get_time()
+        except:
             pass
-        else:
-            self.death = time.time()
 
 
 def track_change(instance, resolution_level=0):
@@ -454,7 +459,7 @@ def create_snapshot(description=''):
     computed.
     """
 
-    ts = time.time()
+    ts = _get_time()
 
     sizer = SCons.asizeof.Asizer()
     objs = [to.ref() for to in tracked_objects.values()]
@@ -477,7 +482,7 @@ def create_snapshot(description=''):
         fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
     else:
         fp.asizeof_total = 0
-    fp.system_total = SCons.Debug.memory()
+    fp.system_total = memory()
     fp.desc = str(description)
 
     # Compute overhead of all structures, use sizer to exclude tracked objects(!)
@@ -505,6 +510,8 @@ class MemStats:
         """
         Load the data from a dump file.
         """
+        if isinstance(file, type('')):
+            file = open(file, 'r')
         self.tracked_index = cPickle.load(file)
         self.footprint = cPickle.load(file)
 
@@ -582,24 +589,35 @@ class MemStats:
         # TODO
         return self
         
-    def print_stats(self, percent=1.0, file=sys.stdout):
+    def print_stats(self, limit=1.0, filter=None, file=sys.stdout):
         """
         Write tracked objects to stdout.
+        The output can be pruned by passing a limit value. If limit is a float
+        smaller than one, only the percentage of the tracked data is printed. If
+        limit is bigger than one, this number of tracked objects are printed.
         """
         if not self.sorted:
             self.sort_stats()
 
-        if percent < 1.0:
-            self.sorted = self.sorted[:int(len(self.sorted)*percent)]
+        if filter:
+            self.sorted = [to for to in self.sorted if filter in to.classname]
+
+        if limit < 1.0:
+            self.sorted = self.sorted[:int(len(self.sorted)*limit)+1]
+        elif limit > 1:
+            self.sorted = self.sorted[:int(limit)]
 
         # Emit per-instance data
         for to in self.sorted:
             to.print_text(file, full=1)
 
+    def print_summary(self, file=sys.stdout):
+        """
+        Print per-class summary for each snapshot.
+        """
         # Emit class summaries for each snapshot
         classlist = self.tracked_index.keys()
         classlist.sort()
-        summary = []
 
         file.write('---- SUMMARY '+'-'*66+'\n')
         for fp in self.footprint:
@@ -639,6 +657,7 @@ def print_stats(file=sys.stdout):
     """
     stats = MemStats(tracked_index, footprint)
     stats.print_stats(file=file)
+    stats.print_summary(file=file)
 
 def print_snapshots(file=sys.stdout):
     """
@@ -708,7 +727,7 @@ def _visualize_gc_graphviz(garbage, metagarbage, edges, file):
     file.write('}\n')
     file.close()
 
-def eliminate_leafs(graph, get_referents, get_referrers=None, debug=0):
+def eliminate_leafs(graph, get_referents=gc.get_referents):
     """
     Eliminate leaf objects (not directly part of cycles).
     """
@@ -763,9 +782,9 @@ def find_garbage(sizer=None, graphfile=None, prune=1):
     if prune:
         while cnt != len(cycles):
             cnt = len(cycles)
-            cycles = eliminate_leafs(cycles, gc.get_referents)
+            cycles = eliminate_leafs(cycles)
 
-    edges = get_edges(cycles, gc.get_referents)
+    edges = get_edges(cycles)
 
     garbage = []
     for obj, sz in map(None, cycles, sizer.asizesof(*cycles)):
