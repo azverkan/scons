@@ -104,7 +104,7 @@ test.write([subdirs[0], cfile], ccode)
 
 test.write([subdirs[0], 'SConstruct'],
       """
-from SCons.Comments import StripCComments
+from SCons.CommentsRE import StripCComments
 print r"%s" % (StripCComments('ccomments.c'))
 """)
 
@@ -119,7 +119,7 @@ test.write([subdirs[1], cfile], ccode)
 
 test.write([subdirs[1], 'SConstruct'],
       """
-from SCons.Comments import StripCCode
+from SCons.CommentsRE import StripCCode
 print r"%s" % (StripCCode('ccomments.c'))
 """)
 
@@ -153,7 +153,7 @@ test.write([subdirs[2], dfile], dcode)
 
 test.write([subdirs[2], 'SConstruct'],
       """
-from SCons.Comments import StripDComments
+from SCons.CommentsRE import StripDComments
 print r"%s" % (StripDComments('dcomments.d'))
 """)
 
@@ -165,7 +165,7 @@ test.write([subdirs[3], dfile], dcode)
 
 test.write([subdirs[3], 'SConstruct'],
       """
-from SCons.Comments import StripDCode
+from SCons.CommentsRE import StripDCode
 print r"%s" % (StripDCode('dcomments.d'))
 """)
 
@@ -192,7 +192,7 @@ test.write([subdirs[4], pyfile], pycode)
 
 test.write([subdirs[4], 'SConstruct'],
       """
-from SCons.Comments import StripHashComments
+from SCons.CommentsRE import StripHashComments
 print r"%s" % (StripHashComments('pycomments.py'))
 """)
 
@@ -205,7 +205,7 @@ test.write([subdirs[5], pyfile], pycode)
 
 test.write([subdirs[5], 'SConstruct'],
       """
-from SCons.Comments import StripHashCode
+from SCons.CommentsRE import StripHashCode
 print r"%s" % (StripHashCode('pycomments.py'))
 """)
 
@@ -233,7 +233,7 @@ test.write([subdirs[6], ffile], fcode)
 
 test.write([subdirs[6], 'SConstruct'],
       """
-from SCons.Comments import StripFortranComments
+from SCons.CommentsRE import StripFortranComments
 print r"%s" % (StripFortranComments('fcomments.f90'))
 """)
 
@@ -245,7 +245,7 @@ test.write([subdirs[7], ffile], fcode)
 
 test.write([subdirs[7], 'SConstruct'],
       """
-from SCons.Comments import StripFortranCode
+from SCons.CommentsRE import StripFortranCode
 print r"%s" % (StripFortranCode('fcomments.f90'))
 """)
 
