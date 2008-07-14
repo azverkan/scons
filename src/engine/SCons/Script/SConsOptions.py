@@ -664,6 +664,13 @@ def Parser(version):
                   action="append",
                   help="Read FILE as the top-level SConstruct file.")
 
+    op.add_option('--garbage',
+                  nargs=1,
+                  dest="garbage_file", default=None,
+                  action="store",
+                  help="Store garbage reference graph in FILE.",
+                  metavar="FILE")
+
     op.add_option('-h', '--help',
                   dest="help", default=False,
                   action="store_true",
@@ -672,6 +679,13 @@ def Parser(version):
     op.add_option("-H", "--help-options",
                   action="help",
                   help="Print this message and exit.")
+
+    op.add_option('--heapprofile',
+                  nargs=1,
+                  dest="heapmonitor_file", default=None,
+                  action="store",
+                  help="Profile SCons heap usage and put results in FILE.",
+                  metavar="FILE")
 
     op.add_option('-i', '--ignore-errors',
                   dest='ignore_errors', default=False,
@@ -743,20 +757,6 @@ def Parser(version):
                   dest="profile_file", default=None,
                   action="store",
                   help="Profile SCons and put results in FILE.",
-                  metavar="FILE")
-
-    op.add_option('--heapprofile',
-                  nargs=1,
-                  dest="heapmonitor_file", default=None,
-                  action="store",
-                  help="Profile SCons heap usage and put results in FILE.",
-                  metavar="FILE")
-
-    op.add_option('--garbage',
-                  nargs=1,
-                  dest="garbage_file", default=None,
-                  action="store",
-                  help="Store garbage reference graph in FILE.",
                   metavar="FILE")
 
     op.add_option('-q', '--question',

@@ -100,4 +100,9 @@ for l in lines:
 test.fail_test(numinst == 0)
 test.fail_test(numclasses == 0)
 
+prof = test.workpath('prof.dat')
+
+test.run(arguments = '-Q -q --debug=heapmonitor --heapprofile %s' % prof, stdout='')
+test.run(arguments = '-Q -q --heapprofile %s' % prof, stdout='')
+
 test.pass_test()

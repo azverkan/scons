@@ -295,6 +295,8 @@ class LogTestCase(unittest.TestCase):
         create_snapshot('Footest')
 
         f1 = StringIO.StringIO()
+        f2 = StringIO.StringIO()
+
         print_stats(file=f1)
 
         tmp = StringIO.StringIO()
@@ -302,31 +304,33 @@ class LogTestCase(unittest.TestCase):
 
         clear()
 
-        stats = MemStats()
+        stats = MemStats(stream=f2)
         assert stats.tracked_index is None
         assert stats.footprint is None
         tmp.seek(0)
-        stats.load(tmp)
+        stats.load_stats(tmp)
         tmp.close()
         assert 'Foo' in stats.tracked_index
 
-        f2 = StringIO.StringIO()
-        stats.print_stats(file=f2)
+        stats.print_stats()
+        stats.print_summary()
 
         assert f1.getvalue() == f2.getvalue()
 
         # Test sort_stats and reverse_order
-        stats.sort_stats('size')
+        assert stats.sort_stats('size') == stats
         assert stats.sorted[0].classname == 'Foo'
         stats.reverse_order()
         assert stats.sorted[0].classname == 'Bar'
         stats.sort_stats('classname', 'birth')
         assert stats.sorted[0].classname == 'Bar'
         self.assertRaises(ValueError, stats.sort_stats, 'name', 42, 'classn')
+        self.assertRaises(NotImplementedError, stats.diff_stats, stats)
 
         # Test partial printing
-        f3 = StringIO.StringIO()
-        stats.print_stats(percent=0.5,file=f3)
+        stats.stream = f3 = StringIO.StringIO()
+        stats.print_stats(filter='Bar',limit=0.5)
+        stats.print_summary()
         assert f3.getvalue()[:12] == '__main__.Bar'
         assert len(f3.getvalue()) < len(f1.getvalue())
 

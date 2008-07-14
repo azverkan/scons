@@ -498,27 +498,37 @@ class MemStats:
     Presents the gathered memory statisitics based on user preferences.
     """
 
-    def __init__(self, tracked_index=None, footprint=None):
+    def __init__(self, filename=None, stream=sys.stdout, tracked_index=None, footprint=None):
         """
         Initialize the data log structures.
         """
+        self.stream = stream
         self.tracked_index = tracked_index
         self.footprint = footprint
         self.sorted = []
+        if filename:
+            self.load_stats(filename)
     
-    def load(self, file):
+    def load_stats(self, file):
         """
         Load the data from a dump file.
+        The argument `file` can be either a filename or a an open file object
+        that requires read access.
         """
         if isinstance(file, type('')):
             file = open(file, 'r')
         self.tracked_index = cPickle.load(file)
         self.footprint = cPickle.load(file)
 
-    def dump(self, file, close=1):
+    def dump_stats(self, file, close=1):
         """
         Dump the logged data to a file.
+        The argument `file` can be either a filename or a an open file object
+        that requires write access. `close` controls if the file is closed
+        before leaving this method (the default behaviour).
         """
+        if isinstance(file, type('')):
+            file = open(file, 'w')
         cPickle.dump(tracked_index, file)
         cPickle.dump(footprint, file)
         if close:
@@ -547,7 +557,32 @@ class MemStats:
 
     def sort_stats(self, *args):
         """
-        Sort the tracked objects based on various criteria.
+        Sort the tracked objects according to the supplied criteria. The
+        argument is a string identifying the basis of a sort (example: 'size' or
+        'classname'). When more than one key is provided, then additional keys
+        are used as secondary criteria when there is equality in all keys
+        selected before them. For example, sort_stats('name', 'size') will sort
+        all the entries according to their class name, and resolve all ties
+        (identical class names) by sorting by size.  The criteria are fields in
+        the tracked object instances. Results are stored in the `self.sorted`
+        list which is used by `MemStats.print_stats()` and other methods. The
+        fields available for sorting are:
+
+          'classname' : the name with which the class was registered
+          'name'      : the classname
+          'birth'     : creation timestamp
+          'death'     : destruction timestamp
+          'size'      : the maximum measured size of the object
+          'tsize'     : the measured size during the largest snapshot
+          'repr'      : string representation of the object
+
+        Note that sorts on size are in descending order (placing most memory
+        consuming items first), whereas name, repr, and creation time searches
+        are in ascending order (alphabetical).
+
+        The function returns self to allow calling functions on the result:
+
+        >>> stats.sort_stats('size').reverse_order().print_stats()
         """
 
         criteria = ('classname', 'tsize', 'birth', 'death', 
@@ -577,24 +612,25 @@ class MemStats:
 
     def reverse_order(self):
         """
-        Reverse the order of the tracked instance index.
+        Reverse the order of the tracked instance index `self.sorted`.
         """
         if not self.sorted:
             self._init_sort()
         self.sorted.reverse()
         return self
 
-
     def diff_stats(self, stats):
-        # TODO
-        return self
+        raise NotImplementedError
         
-    def print_stats(self, limit=1.0, filter=None, file=sys.stdout):
+    def print_stats(self, filter=None, limit=1.0):
         """
-        Write tracked objects to stdout.
-        The output can be pruned by passing a limit value. If limit is a float
-        smaller than one, only the percentage of the tracked data is printed. If
-        limit is bigger than one, this number of tracked objects are printed.
+        Write tracked objects to stdout.  The output can be filtered and pruned.
+        Only objects are printed whose classname contain the substring supplied
+        by the `filter` argument.  The output can be pruned by passing a limit
+        value. If `limit` is a float smaller than one, only the supplied
+        percentage of the total tracked data is printed. If `limit` is bigger
+        than one, this number of tracked objects are printed. Tracked objects
+        are first filtered, and then pruned (if specified).
         """
         if not self.sorted:
             self.sort_stats()
@@ -609,15 +645,17 @@ class MemStats:
 
         # Emit per-instance data
         for to in self.sorted:
-            to.print_text(file, full=1)
+            to.print_text(self.stream, full=1)
 
-    def print_summary(self, file=sys.stdout):
+    def print_summary(self):
         """
         Print per-class summary for each snapshot.
         """
         # Emit class summaries for each snapshot
         classlist = self.tracked_index.keys()
         classlist.sort()
+
+        file = self.stream
 
         file.write('---- SUMMARY '+'-'*66+'\n')
         for fp in self.footprint:
@@ -648,16 +686,16 @@ def dump_stats(file, close=1):
     """
     Dump the logged data to a file.
     """
-    stats = MemStats(tracked_index, footprint)
-    stats.dump(file, close)
+    stats = MemStats(tracked_index=tracked_index, footprint=footprint)
+    stats.dump_stats(file, close)
 
 def print_stats(file=sys.stdout):
     """
     Write tracked objects by class to stdout.
     """
-    stats = MemStats(tracked_index, footprint)
-    stats.print_stats(file=file)
-    stats.print_summary(file=file)
+    stats = MemStats(stream=file, tracked_index=tracked_index, footprint=footprint)
+    stats.print_stats()
+    stats.print_summary()
 
 def print_snapshots(file=sys.stdout):
     """
