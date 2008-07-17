@@ -41,140 +41,24 @@ At the moment:
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 import re
-from random import sample
-from string import digits, letters
-
-# based on Jeff Epler's idea:
-# http://mail.python.org/pipermail/python-list/2005-July/333370.html
-
-# TODO: 
-#   - add RE which is able to strip whitespaces from the whole buffer
-#     but not from the quotings (change '   printf("    ");    ' into
-#     'printf("     ");'). At the moment whitespaces_filter() function
-#     does this.
-
-def generate_random_string(length = 10):
-    """Return random string compounded of letters [a-zA-Z] and digits
-    [1-9] of length 'length'."""
-    return ''.join(sample(digits+letters, length))
-
-def string_to_buf(txt, i, len_max, end_char='"'):
-    """Extract string from the buffer. The string starts at
-    the position 'i' in the buffer 'txt' and ends with the
-    sign 'end_char'.
-
-    Function string_to_buf() takes four arguments:
-    'txt' - file contents (as a string or list of characters)
-    'i' - current position in the file (when calling
-          string_to_buf() 'i' *must* be a string opening char)
-    'len_max' - length of the string/list 'txt'
-    'end_char' - sign closing the string (default: '"')
-
-    Returns a tuple: extracted string as a list of characters
-    and the current position in the buffer (first sign after
-    the extracted string).
-
-    This function is escaped-quotes sensitive."""
-
-    metachars = 0
-    buf = []
-    buf.append(txt[i])
-    i += 1
-    try:
-        while i < len_max:
-            if txt[i] == '\\':
-                metachars += 1
-                buf.append(txt[i])
-                i += 1
-                continue
-            elif txt[i] == end_char:
-                if metachars % 2:
-                    buf.append(txt[i])
-                    i += 1
-                    metachars = 0
-                    continue
-                buf.append(txt[i])
-                i += 1
-                break
-            buf.append(txt[i])
-            i += 1
-            metachars = 0
-    except IndexError:
-        return buf, i
-    return buf, i
-
-
-def whitespaces_filter(txt, preprocessor=False):
-    """Strips the whitespaces (' ', '\t', '\n' and '\r') from the
-    buffer 'txt', but leaves the whitespaces within the quotes
-    (and within the lines that start with '#' sign when the 'preprocessor'
-    flag is True).
-
-    In other words whitespaces_filter() changes the string:
-    '\n \r \t" \n\"\r" \t' into: '" \n\"\r"'.
-
-    This function is escaped-quotes sensitive."""
-
-    i = 0
-    len_max = len(txt)
-    buf = []
-    whitespaces = ' \t\n\r'
-    while i < len_max:
-        # add double-quoted string to the buffer
-        if txt[i] == '"':
-            new_buf, i = string_to_buf(txt, i, len_max)
-            buf.extend(new_buf)
-        # add single-quoted string to the buffer
-        elif txt[i] == "'":
-            new_buf, i = string_to_buf(txt, i, len_max, "'")
-            buf.extend(new_buf)
-        # add C-preprocessor lines to the buffer (with whitespaces)
-        elif preprocessor and txt[i] == '#':
-            new_buf, i = string_to_buf(txt, i, len_max, '\n')
-            buf.extend('\n')
-            buf.extend(new_buf)
-        else:
-            if not (txt[i] in whitespaces):
-                buf.append(txt[i])
-            i += 1
-
-    return ''.join(buf)
 
 def quot_regexp(c):
     """Returns a regular expression that matches a region delimited by c,
     inside which c may be escaped with a backslash."""
 
-    return r"%s(\\.|[^%s])*%s" % (c, c, c)
+    return r"(%s(?:\\.|[^%s])*%s)" % (c, c, c)
 
 def oneline_comment_regexp(chars):
     """Returns a regular expression that matches a region beginning with
     'chars' and ending with new line."""
 
-    return r"%s[^\n]*\n" % (chars)
+    return r"(%s[^\n]*\n)" % (chars)
 
 def multiline_comment_regexp(begin_string, end_string):
     """Returns a regular expression that matches a region beginning with
     begin_string and ending with end_string."""
 
-    return r"%s.*?%s" % (begin_string, end_string)
-
-def comments_replace(x, char='#', preprocessor = False, randomstring = ''):
-    """Returns empty string for a string that starts with 'char' character
-    or the string itself otherwise.
-
-    If preprocessor is True, return 'randomstring' for every string that
-    starts with '/*'"""
-
-    x = x.group(0)
-    # Replace the '/* ... */' comments with 'randomstring' string.
-    # Later on, after stripping the whitespaces we can change
-    # the 'randomstring' strings into ' ' to simulate the behavior
-    # of C preprocessor.
-    if preprocessor and x.startswith('/*'):
-        return randomstring
-    elif x.startswith(char):
-        return ''
-    return x
+    return r"(%s.*?%s)" % (begin_string, end_string)
 
 single_quoted_string = quot_regexp("'")
 double_quoted_string = quot_regexp('"')
@@ -195,7 +79,9 @@ def GenericStripCode(filename, patterns):
     regular expressions defined in 'patterns' tuple from
     the 'filename' file."""
 
-    if type(patterns) != type((None, None)):
+    list_or_tuple = (type((None, )), type([None]))
+
+    if type(patterns) not in list_or_tuple:
         patterns = (patterns, )
 
     try:
@@ -205,50 +91,98 @@ def GenericStripCode(filename, patterns):
 
     pattern = re.compile('|'.join(patterns), re.DOTALL)
     contents = re.sub(quotes_pat, '', contents)
-    contents = ''.join(pattern.findall(contents))
+    contents = ''.join([''.join(i) for i in pattern.findall(contents)])
     return re.sub(whitespaces, '', contents)
 
-def GenericStripComments(filename, patterns, comment_first_chars=('/',), preprocessor = False):
+def GenericStripComments(filename, patterns, quotings=('"', "'"), comment_first_chars=('//','/\*'), preprocessor = False):
     """GenericStripComments() function returns contents
     of the 'filename' file except of strings that fit regular
     expressions defined in 'patterns' tuple.
 
+    'patterns' may be a string, list or tuple containing regular expression
+    strings ready to be compiled with re.compile() function.
+
+    'quotings' is a tuple of characters, each of which marks beginning
+    (and end) of a string. Patterns from the 'patterns' argument found
+    between the 'quotings' characters won't be stripped.
+
     'comment_first_chars' is a tuple that defines signs that comments
     start with. For C-like comments comment_first_chars is equal to
-    ('/',), because '/' sign fits for '/* ... */' comments as well
-    as '// ...' comments.
+    ('//', '/\*').
 
     When 'preprocessor' is True GenericStripComments won't strip
     whitespaces from the lines that start with '#' sign.
     """
 
-    if type(patterns) != type((None, None)):
-        patterns = (patterns, )
+    # patterns must be a list, but it may be passed as a tuple or string
+    if type(patterns) == type((None, )):
+        patterns = list(patterns)
+    elif type(patterns) == type(''):
+        patterns = [patterns]
 
-    if type(comment_first_chars) != type((None, None)):
+    # comment_first_chars must be tuple or list, but may be passed as string
+    list_or_tuple = (type((None, )), type([None]))
+    if type(comment_first_chars) not in list_or_tuple:
         comment_first_chars = (comment_first_chars, )
+    
+    # quotings must be a tuple or list, but may be passed as string
+    if type(quotings) not in list_or_tuple:
+        quotings = (quotings, )
+
+    for quoting_char in quotings:
+        # We got to insert the quoting regexp at the beginning of
+        # patterns list to match quoted comments before we try to
+        # match real comments.
+        patterns.insert(0, quot_regexp(quoting_char))
+
+    if preprocessor:
+        # We try to match all the preprocessor lines; for every line
+        # except the first line the pattern '(?:\n)(#.*?\n)' works fine,
+        # but in case the first line in file is a preprocessor line
+        # we got to search for '(?:^)(#.*?\n)' as well.
+        patterns.insert(0, '(?:\n|^)(#.*?\n)')
+
+    # We got all the patterns:
+    #  - preprocessor pattern if 'preprocessor' argument is True
+    #  - patterns for quotes (we don't want to strip comments inside quotes)
+    #  - patterns for comments to strip
+    # so let's compile them now.
+    pattern = re.compile('|'.join(patterns), re.DOTALL)
+
+    # drop strings that start with comment signs
+    cfc_pat = re.compile('^(?:' + '|'.join(comment_first_chars) + ')')
+    startswithcomment = lambda x: cfc_pat.search(x)
+
+    # drop strings that start with quote signs
+    quotings_pat = re.compile('^(?:' + '|'.join(quotings) + ')')
+    startswithquoting = lambda x: quotings_pat.search(x)
 
     try:
         contents = open(filename).read()
     except:
         return ''
 
-    if preprocessor:
-        randomstring = generate_random_string()
-    else:
-        randomstring = ''
+    new_buf = ['']
+    buf_split = re.split(pattern, contents)
+    for i in buf_split:
+        if i:
+            if startswithcomment(i):
+                if preprocessor:
+                    new_buf.append('')
+                continue
+            elif startswithquoting(i):
+                new_buf[-1] = new_buf[-1] + i
+                continue
+            # don't strip the whitespaces for preprocessor lines
+            elif preprocessor and i.startswith('#'):
+                new_buf[-1] = new_buf[-1] + i
+                continue
+            # couldn't match the string, so just strip the whitespaces
+            # and add it to the buffer
+            new_buf[-1] = new_buf[-1] + re.sub('[ \n\r\t]', '', i)
 
-    pattern = re.compile('|'.join(patterns), re.DOTALL)
-
-    for first_char in comment_first_chars:
-        def generic_replace(x):
-            return comments_replace(x, first_char, preprocessor, randomstring)
-        contents = pattern.sub(generic_replace, contents)
-
-    contents = whitespaces_filter(contents, preprocessor)
-    if preprocessor:
-        return re.sub(randomstring, ' ', contents)
-    return contents
+    # add spaces wherever there was a comment
+    return ' '.join(new_buf)
 
 
 def StripCCode(filename):
@@ -269,10 +203,8 @@ def StripCComments(filename):
 
     Works for '//' and '/* */' comments."""
 
-    return GenericStripComments(filename, (single_quoted_string,
-                                           double_quoted_string,
-                                           c_comment,
-                                           cxx_comment), preprocessor = True)
+    return GenericStripComments(filename, (c_comment, cxx_comment),
+                                                preprocessor = True)
 
 def StripDCode(filename):
     """Strip the code from the file and return comments.
@@ -293,27 +225,26 @@ def StripDComments(filename):
     
     Works for '//', '/* */' and '/+ +/' comments."""
 
-    return GenericStripComments(filename, (single_quoted_string,
-                                           double_quoted_string,
-                                           d_comment,
-                                           c_comment,
-                                           cxx_comment))
+    return GenericStripComments(filename, (d_comment, c_comment, cxx_comment),
+                                     comment_first_chars = ('/\+', '/\*', '//'))
 
 
 def StripFortranComments(filename):
-    return GenericStripComments(filename, (single_quoted_string,
-                                           double_quoted_string,
-                                           oneline_comment_regexp('!')),
-                                             comment_first_chars = '!')
+    return GenericStripComments(filename, (oneline_comment_regexp('!')),
+                                               comment_first_chars = '!')
 
 def StripFortranCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('!'))
 
 def StripHashComments(filename):
-    return GenericStripComments(filename, (single_quoted_string,
-                                           double_quoted_string,
-                                           oneline_comment_regexp('#')),
+    return GenericStripComments(filename, oneline_comment_regexp('#'),
                                              comment_first_chars = '#')
 
 def StripHashCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('#'))
+
+#print StripHashComments('py.py')
+#print '-'*80
+#print StripCComments('test.c')
+#print '-'*80
+#print StripCCode('test.c')
