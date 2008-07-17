@@ -8,11 +8,6 @@ At the moment this module *is not* perfectly replaceable with SCons.Comments
 module. Functions names are the same, but the behaviour of StripCComment
 especially is not. The differences are easily traceable by diff'ing 
 test/Comments.py and test/CommentsRE.py files.
-
-At the moment:
- - all Strip*Code() functions work (but REs are not optimized yet),
- - all Strip*Comments() functions work (but REs are supported by
-   whitespaces_filter() function which uses while loops)
 """
 
 #
@@ -242,9 +237,3 @@ def StripHashComments(filename):
 
 def StripHashCode(filename):
     return GenericStripCode(filename, oneline_comment_regexp('#'))
-
-#print StripHashComments('py.py')
-#print '-'*80
-#print StripCComments('test.c')
-#print '-'*80
-#print StripCCode('test.c')
