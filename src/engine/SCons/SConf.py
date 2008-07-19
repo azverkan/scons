@@ -38,6 +38,9 @@ import sys
 import traceback
 import types
 
+if sys.version_info[:2] >= (2,4):
+    from subprocess import Popen, PIPE
+
 import SCons.Action
 import SCons.Builder
 import SCons.Errors
@@ -376,8 +379,8 @@ class SConfBase:
     """
 
     def __init__(self, env, custom_tests = {}, conf_dir='$CONFIGUREDIR',
-                 log_file='$CONFIGURELOG', config_h = None, _depth = 0): 
-        """Constructor. Pass additional tests in the custom_tests-dictinary,
+                 log_file='$CONFIGURELOG', config_h = None, _depth = 0):
+        """Constructor. Pass additional tests in the custom_tests-dictionary,
         e.g. custom_tests={'CheckPrivate':MyPrivateTest}, where MyPrivateTest
         defines a custom test.
         Note also the conf_dir and log_file arguments (you may want to
@@ -410,6 +413,8 @@ class SConfBase:
                  'CheckCXXHeader'     : CheckCXXHeader,
                  'CheckLib'           : CheckLib,
                  'CheckLibWithHeader' : CheckLibWithHeader,
+                 'CheckPython'        : CheckPython,
+                 'CheckPythonHeaders' : CheckPythonHeaders,
                }
         self.AddTests(default_tests)
         self.AddTests(custom_tests)
@@ -985,3 +990,118 @@ def CheckLibWithHeader(context, libs, header, language,
             call = call, language = language, autoadd = autoadd)
     context.did_show_result = 1
     return not res
+
+def _get_python_prefix(python_exe):
+    """Returns a tuple of strings, respectively: (1) a string giving the
+    site-specific directory prefix where the platform-independent Python
+    files are installed and (2) a string giving the site-specific directory
+    prefix where the platform-dependent Python files are installed."""
+
+    prefix_cmd = "import sys; print sys.prefix; print sys.exec_prefix"
+    try:
+        out = Popen([python_exe, "-c", prefix_cmd],
+                    stdout=PIPE).communicate()[0].split("\n")
+    except NameError:
+        # os.popen4 is available since Python 2.0
+        out = os.popen4("%s -c '%s'" % (python_exe, prefix_cmd))[1].readlines()
+
+    py_prefix = out[0].rstrip()
+    py_exec_prefix = out[1].rstrip()
+    return py_prefix, py_exec_prefix
+
+
+def CheckPython(context, minver):
+    """Check if a python interpreter is found matching a given minimum
+    version.
+    
+    'minver' should be a tuple, eg. to check for python >= 2.4.2 pass
+    (2,4,2) as minver.
+
+    If detection is successful, env['PYTHON'] is defined to point to
+    the python that matches the minimum version constraint.  In
+    addition, PYTHON_VERSION is defined as 'MAJOR.MINOR' (eg. '2.4') of
+    the actual python version found.  Finally, pythondir and pyexecdir
+    are defined, and point to the site-packages directories
+    (architecture independent and architecture dependent,
+    respectively) appropriate for this python version.
+    """
+
+    tmplist = []
+    for x in minver:
+        tmplist.append(str(x))
+    pyver_str = '.'.join(tmplist)
+    context.Message('Checking for Python >= %s...' % (pyver_str,))
+    try:
+        python = context.env['PYTHON']
+    except KeyError:
+        try:
+            python = os.environ['PYTHON']
+        except KeyError:
+            python = SCons.Util.WhereIs("python")
+            if not python:
+                python = SCons.Util.WhereIs("python%i.%i" % (minver[0],
+                                                             minver[1]))
+    minverhex = 0
+    minver = list(minver) + [0, 0, 0, 0]
+    for i in xrange(0, 4):
+        minverhex = (minverhex << 8) + minver[i]
+    prog = "import sys; sys.exit(sys.hexversion >= %s)" % minverhex
+    if python is None:
+        python = 'python'
+    try:
+        try:
+            result = Popen([python, "-c", prog]).wait()
+        except NameError:
+            result = os.popen("%s -c '%s'" % (python, prog)).close()
+    except OSError:
+        context.Result(False)
+        return False
+    context.Result(result)
+    if result:
+        context.env.Replace(PYTHON=python)
+        pycmd = 'import sys; print sys.version[:3]'
+        try:
+            proc = Popen([python, "-c", pycmd], stdout=PIPE)
+            pyver = proc.communicate()[0].rstrip()
+        except NameError:
+            proc = os.popen4("%s -c '%s'" % (python, pycmd))
+            pyver = proc[1].readlines()[0].rstrip()
+        context.env.Replace(PYTHON_VERSION=pyver)
+
+        # we use prefix and exec_prefix if they're defined,
+        # else we ask python for them
+        try:
+            prefix = context.env['prefix']
+            exec_prefix = context.env['exec_prefix']
+        except KeyError:
+            prefix, exec_prefix = _get_python_prefix(python)
+        rdir = 'lib', context.env.subst('python$PYTHON_VERSION'),\
+               'site-packages'
+        context.env.Replace(pythondir=os.path.join(prefix, *rdir))
+        context.env.Replace(pyexecdir=os.path.join(exec_prefix, *rdir))
+    return result
+
+
+def CheckPythonHeaders(context):
+    """Check for headers necessary to compile python extensions.
+    If successful, CPPPATH is augmented with paths for python headers.
+    This test requires that CheckPython was previously executed and
+    successful."""
+    
+    py_prefix, py_exec_prefix = _get_python_prefix(context.env['PYTHON'])
+    rdir = 'include', context.env.subst("python$PYTHON_VERSION")
+    python_includes = [os.path.join(py_prefix, *rdir)]
+    if py_prefix != py_exec_prefix:
+        python_includes.append(path.join(py_exec_prefix, *rdir))
+    try:
+        old_cpp_path = context.env['CPPPATH']
+    except KeyError:
+        old_cpp_path = []
+    context.env.Append(CPPPATH=python_includes)
+    result = context.sconf.CheckCHeader('Python.h', '<>')
+    if not result: # if headers not found, take it back
+        context.env.Replace(CPPPATH=old_cpp_path)
+    context.did_show_result = 1 # CheckCHeader prints the result
+    context.Result(result)
+    return result
+
