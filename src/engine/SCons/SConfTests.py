@@ -647,7 +647,28 @@ int main() {
             assert ret, ret
         finally:
             sconf.Finish()
-            
+
+
+    def test_CheckPython(self):
+        """Test CheckPython and CheckPythonHeaders
+        """
+        self._resetSConfState()
+        sconf = self.SConf.SConf(self.scons_env,
+                                 conf_dir=self.test.workpath('config.tests'),
+                                 log_file=self.test.workpath('config.log'))
+        try:
+            ret = sconf.CheckPython((4,0,0))
+            assert not ret, ret
+            ret = sconf.CheckPython((2,0,0))
+            assert ret, ret
+            ret = sconf.CheckPythonHeaders()
+            assert ret, ret
+            self.scons_env['CPPPATH']
+            self.scons_env['PYTHON']
+            self.scons_env['PYTHON_VERSION']
+        finally:
+            sconf.Finish()
+
 
 if __name__ == "__main__":
     suite = unittest.makeSuite(SConfTestCase, 'test_')
