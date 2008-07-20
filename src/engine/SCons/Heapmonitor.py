@@ -206,7 +206,7 @@ class TrackedObject(object):
         self.ref = weakref.ref(instance, self.finalize)
         self.id = id(instance)
         self.repr = ''
-        self.name = instance.__class__
+        self.name = str(instance.__class__)
         self.birth = _get_time()
         self.death = None
         self._resolution_level = resolution_level
@@ -519,6 +519,7 @@ class MemStats:
             file = open(file, 'r')
         self.tracked_index = cPickle.load(file)
         self.footprint = cPickle.load(file)
+        self.sorted = []
 
     def dump_stats(self, file, close=1):
         """
@@ -635,16 +636,18 @@ class MemStats:
         if not self.sorted:
             self.sort_stats()
 
+        sorted = self.sorted
+
         if filter:
-            self.sorted = [to for to in self.sorted if filter in to.classname]
+            sorted = [to for to in sorted if filter in to.classname]
 
         if limit < 1.0:
-            self.sorted = self.sorted[:int(len(self.sorted)*limit)+1]
+            sorted = sorted[:int(len(self.sorted)*limit)+1]
         elif limit > 1:
-            self.sorted = self.sorted[:int(limit)]
+            sorted = sorted[:int(limit)]
 
         # Emit per-instance data
-        for to in self.sorted:
+        for to in sorted:
             to.print_text(self.stream, full=1)
 
     def print_summary(self):

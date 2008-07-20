@@ -329,7 +329,10 @@ class LogTestCase(unittest.TestCase):
 
         # Test partial printing
         stats.stream = f3 = StringIO.StringIO()
+        stats.sort_stats()
+        tolen = len(stats.sorted)
         stats.print_stats(filter='Bar',limit=0.5)
+        assert len(stats.sorted) == tolen
         stats.print_summary()
         assert f3.getvalue()[:12] == '__main__.Bar'
         assert len(f3.getvalue()) < len(f1.getvalue())
