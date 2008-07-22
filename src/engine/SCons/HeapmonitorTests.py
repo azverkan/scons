@@ -186,6 +186,22 @@ class SnapshotTestCase(unittest.TestCase):
         assert footprint[2].desc == 'beta'
         assert footprint[3].desc == '42'
 
+    def test_background_monitoring(self):
+        """Test background monitoring.
+        """
+        start_periodic_snapshots(0.1)
+        assert SCons.Heapmonitor._periodic_thread.interval == 0.1
+        assert SCons.Heapmonitor._periodic_thread.getName() is 'BackgroundMonitor'
+        for x in xrange(10): # try to interfere
+            create_snapshot()
+        time.sleep(0.5)
+        start_periodic_snapshots(0.2)
+        assert SCons.Heapmonitor._periodic_thread.interval == 0.2
+        stop_periodic_snapshots()
+        assert SCons.Heapmonitor._periodic_thread is None
+        assert len(footprint) > 10
+
+
 class TrackClassTestCase(unittest.TestCase):
 
     def setUp(self):

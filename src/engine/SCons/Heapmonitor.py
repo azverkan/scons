@@ -49,6 +49,7 @@ import new
 import inspect
 import cPickle
 import gc
+import threading
 
 import SCons.asizeof
 from SCons.Debug import memory
@@ -75,6 +76,12 @@ _observers = {}
 
 # Fixpoint for program start relative time stamp.
 _local_start = time.time()
+
+# Thread object responsible for background monitoring
+_periodic_thread = None
+
+# Lock that protects `create_snapshot`
+_snapshot_lock = threading.Lock()
 
 class _ClassObserver(object):
     """
@@ -448,6 +455,57 @@ def clear():
     detach_all()
     footprint[:] = []
 
+#
+# Background Monitoring
+#
+
+class PeriodicThread(threading.Thread):
+    """
+    Thread object to take snapshots periodically.
+    """    
+    def run(self):
+        """
+        Loop until a stop signal is set.
+        """
+        self.stop = 0
+        while not self.stop:
+            create_snapshot()
+            time.sleep(self.interval)
+
+def start_periodic_snapshots(interval=1.0):
+    """
+    Start a thread which takes snapshots periodically. The `interval` specifies
+    the time in seconds the thread waits between taking snapshots. The thread is
+    started as a daemon allowing the program to exit. If periodic snapshots are
+    already active, the interval is updated.
+    """
+    global _periodic_thread
+
+    if not _periodic_thread:
+        _periodic_thread = PeriodicThread(name='BackgroundMonitor')
+        _periodic_thread.setDaemon(True)
+        _periodic_thread.interval = interval
+        _periodic_thread.start()
+    elif _periodic_thread.isAlive():
+        _periodic_thread.interval = interval
+
+def stop_periodic_snapshots():
+    """
+    Post a stop signal to the thread that takes the periodic snapshots. The
+    function waits for the thread to terminate which can take some time
+    depending on the configured interval.
+    """
+    global _periodic_thread
+
+    if _periodic_thread and _periodic_thread.isAlive():
+        _periodic_thread.stop = 1
+        _periodic_thread.join()
+        _periodic_thread = None
+
+#
+# Snapshots
+#
+
 class Footprint:
     pass
 
@@ -461,37 +519,51 @@ def create_snapshot(description=''):
 
     ts = _get_time()
 
-    sizer = SCons.asizeof.Asizer()
-    objs = [to.ref() for to in tracked_objects.values()]
-    sizer.exclude_refs(*objs)
+    try:
+        # Snapshots can be taken asynchronously. Prevent race conditions when
+        # two snapshots are taken at the same time. TODO: It is not clear what
+        # happens when memory is allocated/released while this function is
+        # executed but it will likely lead to inconsistencies. Either pause all
+        # other threads or don't size individual objects in asynchronous mode.
+        _snapshot_lock.acquire()
 
-    # The objects need to be sized in a deterministic order. Sort the
-    # objects by its creation date which should at least work for non-parallel
-    # execution. The "proper" fix would be to handle shared data separately.
-    sorttime = lambda i, j: (i.birth < j.birth) and -1 or (i.birth > j.birth) and 1 or 0
-    tos = tracked_objects.values()
-    tos.sort(sorttime)
-    for to in tos:
-        to.track_size(ts, sizer)
+        sizer = SCons.asizeof.Asizer()
+        objs = [to.ref() for to in tracked_objects.values()]
+        sizer.exclude_refs(*objs)
 
-    fp = Footprint()
+        # The objects need to be sized in a deterministic order. Sort the
+        # objects by its creation date which should at least work for non-parallel
+        # execution. The "proper" fix would be to handle shared data separately.
+        sorttime = lambda i, j: (i.birth < j.birth) and -1 or (i.birth > j.birth) and 1 or 0
+        tos = tracked_objects.values()
+        tos.sort(sorttime)
+        for to in tos:
+            to.track_size(ts, sizer)
 
-    fp.timestamp = ts
-    fp.tracked_total = sizer.total
-    if fp.tracked_total:
-        fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
-    else:
-        fp.asizeof_total = 0
-    fp.system_total = memory()
-    fp.desc = str(description)
+        fp = Footprint()
 
-    # Compute overhead of all structures, use sizer to exclude tracked objects(!)
-    if fp.tracked_total:
-        fp.overhead = sizer.asizeof(tracked_index, tracked_objects, footprint)
-        fp.asizeof_total -= fp.overhead
+        fp.timestamp = ts
+        fp.tracked_total = sizer.total
+        if fp.tracked_total:
+            fp.asizeof_total = SCons.asizeof.asizeof(all=True, code=True)
+        else:
+            fp.asizeof_total = 0
+        fp.system_total = memory()
+        fp.desc = str(description)
 
-    footprint.append(fp)
+        # Compute overhead of all structures, use sizer to exclude tracked objects(!)
+        if fp.tracked_total:
+            fp.overhead = sizer.asizeof(tracked_index, tracked_objects, footprint)
+            fp.asizeof_total -= fp.overhead
 
+        footprint.append(fp)
+
+    finally:
+        _snapshot_lock.release()
+
+#
+# Off-line Analysis
+#
 
 class MemStats:
     """
