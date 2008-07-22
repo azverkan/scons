@@ -768,36 +768,47 @@ def _visualize_gc_graphviz(garbage, metagarbage, edges, file):
     file.write('}\n')
     file.close()
 
-def eliminate_leafs(graph, get_referents=gc.get_referents):
-    """
-    Eliminate leaf objects (not directly part of cycles).
-    """
-    result = []
-    idset = set([id(x) for x in graph])
-    for n in graph:
-        refset = set([id(x) for x in get_referents(n)])
-        if refset.intersection(idset):
-            result.append(n)
-    return result
+if hasattr(gc, 'get_referents'):
+    def eliminate_leafs(graph, get_referents=gc.get_referents):
+        """
+        Eliminate leaf objects (not directly part of cycles).
+        """
+        result = []
+        idset = set([id(x) for x in graph])
+        for n in graph:
+            refset = set([id(x) for x in get_referents(n)])
+            if refset.intersection(idset):
+                result.append(n)
+        return result
 
-def get_edges(graph, get_referents=gc.get_referents):
-    """
-    Compute the edges for the reference graph.
-    The function returns a set of tuples (id(a), id(b), ref) if a
-    references b with the referent 'ref'.
-    """
-    idset = set([id(x) for x in graph])
-    edges = set([])
-    for n in graph:
-        refset = set([id(x) for x in get_referents(n)])
-        for ref in refset.intersection(idset):
-            label = ''
-            for (k, v) in inspect.getmembers(n):
-                if id(v) == ref:
-                    label = k
-                    break
-            edges.add((id(n), ref, label))
-    return edges
+    def get_edges(graph, get_referents=gc.get_referents):
+        """
+        Compute the edges for the reference graph.
+        The function returns a set of tuples (id(a), id(b), ref) if a
+        references b with the referent 'ref'.
+        """
+        idset = set([id(x) for x in graph])
+        edges = set([])
+        for n in graph:
+            refset = set([id(x) for x in get_referents(n)])
+            for ref in refset.intersection(idset):
+                label = ''
+                for (k, v) in inspect.getmembers(n):
+                    if id(v) == ref:
+                        label = k
+                        break
+                edges.add((id(n), ref, label))
+        return edges
+
+else:
+    # TODO Implement the functions using get_referrers instead of get_referents
+    # for Python 2.2 compliance.
+    def eliminate_leafs(graph, get_referents=None, get_referrers=gc.get_referrers):
+        return graph
+
+    def get_edges(graph, get_referents=None, get_referrers=gc.get_referrers):
+        return set([])
+
 
 def find_garbage(sizer=None, graphfile=None, prune=1):
     """

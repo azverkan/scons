@@ -131,7 +131,7 @@ from sys        import modules, getrecursionlimit, stdout
 import types    as     Types
 import weakref  as     Weakref
 
-__version__ = '4.0 (July 10, 2008)'
+__version__ = '4.1 (July 18, 2008)'
 __all__     = ['adict', 'asized', 'asizeof', 'asizesof',
                'Asized', 'Asizer',  # classes
                'basicsize', 'flatsize', 'itemsize', 'leng', 'refs']
@@ -228,8 +228,8 @@ except ImportError:
 def _basicsize(t, base=0):
     '''Get non-zero basicsize of type.
     '''
-     # get the size plus gc overhead
     s = max(getattr(t, '__basicsize__', 0), base)
+     # plus gc overhead if applicable
     if getattr(t, '__flags__', 0) & _Py_PFLAGS_HAVE_GC:
         s += _sizeof_CPyGC_Head
     return s
@@ -1164,12 +1164,9 @@ class Asizer(object):
                         s += v.item * v.leng(obj)
                      # _getsizeof only for non-ignored typedefs
                     if _getsizeof and v.kind is not _kind_ignored:
-                        try:  # sys.getsizeof()
-                            t = _getsizeof(obj)
-                            if s < t:
-                               s = t
-                        except:
-                            pass
+                        t = _getsizeof(obj, 0)  # default
+                        if s < t:
+                           s = t
                     if self._mask:  # aligned size
                         s = (s + self._mask) & ~self._mask
                     if self._profile:  # profile type
