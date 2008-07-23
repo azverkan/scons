@@ -25,44 +25,73 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify that:
-
-    --  the File() global function and environment method work correctly;
-    --  the former does not try to expand construction variables;
-    --  calling File() as a method of a File() object works correctly.
+Test explicit checkouts from local RCS files.
 """
+
+import os.path
 
 import TestSCons
 
 test = TestSCons.TestSCons()
 
+rcs = test.where_is('rcs')
+if not rcs:
+    test.skip_test("Could not find 'rcs'; skipping test(s).\n")
+
+ci = test.where_is('ci')
+if not ci:
+    test.skip_test("Could not find `ci' command, skipping test(s).\n")
+
+co = test.where_is('co')
+if not co:
+    test.skip_test("Could not find `co' command, skipping test(s).\n")
+
+
+
+main_cpp_contents = """\
+#include <stdio.h>
+#include <stdlib.h>
+int
+main(int argc, char *argv[])
+{
+    printf("main.c %s\\n");
+    exit (0);
+}
+"""
+
+test.write('main.c', main_cpp_contents % 1)
+
+test.run(program = ci, arguments = '-f -tmain.c main.c', stderr = None)
+
+
+
 test.write('SConstruct', """
-env = Environment(FOO = 'fff', BAR = 'bbb')
-print File('ddd')
-print File('$FOO')
-print File('${BAR}_$BAR')
-print env.File('eee')
-print env.File('$FOO')
-print env.File('${BAR}_$BAR')
-f1 = env.File('f1')
-print f1
-f2 = f1.File('f2')
-print f2
+import os
+for key in ['LOGNAME', 'USERNAME', 'USER']:
+    logname = os.environ.get(key)
+    if logname: break
+ENV = {'PATH' : os.environ['PATH'],
+       'LOGNAME' : logname}
+env = Environment(ENV=ENV, RCS_COFLAGS='-q')
+env.SourceCode('main.c', env.RCS())
+env2 = env.Clone()
+env2.Program('main.exe', 'main.c')
 """)
 
-expect = test.wrap_stdout(read_str = """\
-ddd
-$FOO
-${BAR}_$BAR
-eee
-fff
-bbb_bbb
-f1
-f2
-""", build_str = """\
-scons: `.' is up to date.
-""")
+test.run()
 
-test.run(stdout = expect)
+test.run(program = test.workpath('main.exe'), stdout = "main.c 1\n")
+
+
+
+test.run(program = co, arguments = '-l main.c', stderr = None)
+
+test.write('main.c', main_cpp_contents % 2)
+
+test.not_up_to_date(arguments = 'main.exe')
+
+test.run(program = test.workpath('main.exe'), stdout = "main.c 2\n")
+
+
 
 test.pass_test()

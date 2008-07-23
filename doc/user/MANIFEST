@@ -12,13 +12,11 @@ command-line.xml
 cons.pl
 copyright.xml
 depends.xml
-ENV.xml
 environments.xml
 errors.xml
 example.xml
 factories.xml
 file-removal.xml
-help.xml
 hierarchy.xml
 install.xml
 java.xml
@@ -27,6 +25,7 @@ less-simple.xml
 main.xml
 make.xml
 nodes.xml
+output.xml
 parseconfig.xml
 preface.xml
 python.xml
