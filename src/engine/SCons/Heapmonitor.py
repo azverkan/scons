@@ -49,7 +49,6 @@ import new
 import inspect
 import cPickle
 import gc
-import threading
 
 import SCons.asizeof
 from SCons.Debug import memory
@@ -81,7 +80,7 @@ _local_start = time.time()
 _periodic_thread = None
 
 # Lock that protects `create_snapshot`
-_snapshot_lock = threading.Lock()
+_snapshot_lock = None 
 
 class _ClassObserver(object):
     """
@@ -459,48 +458,55 @@ def clear():
 # Background Monitoring
 #
 
-class PeriodicThread(threading.Thread):
-    """
-    Thread object to take snapshots periodically.
-    """    
-    def run(self):
+try:
+    import threading
+except ImportError:
+    pass
+else:
+    _snapshot_lock = threading.Lock()
+
+    class PeriodicThread(threading.Thread):
         """
-        Loop until a stop signal is set.
+        Thread object to take snapshots periodically.
+        """    
+        def run(self):
+            """
+            Loop until a stop signal is set.
+            """
+            self.stop = 0
+            while not self.stop:
+                create_snapshot()
+                time.sleep(self.interval)
+
+    def start_periodic_snapshots(interval=1.0):
         """
-        self.stop = 0
-        while not self.stop:
-            create_snapshot()
-            time.sleep(self.interval)
+        Start a thread which takes snapshots periodically. The `interval` specifies
+        the time in seconds the thread waits between taking snapshots. The thread is
+        started as a daemon allowing the program to exit. If periodic snapshots are
+        already active, the interval is updated.
+        """
+        global _periodic_thread
 
-def start_periodic_snapshots(interval=1.0):
-    """
-    Start a thread which takes snapshots periodically. The `interval` specifies
-    the time in seconds the thread waits between taking snapshots. The thread is
-    started as a daemon allowing the program to exit. If periodic snapshots are
-    already active, the interval is updated.
-    """
-    global _periodic_thread
+        if not _periodic_thread:
+            _periodic_thread = PeriodicThread(name='BackgroundMonitor')
+            _periodic_thread.setDaemon(True)
+            _periodic_thread.interval = interval
+            _periodic_thread.start()
+        elif _periodic_thread.isAlive():
+            _periodic_thread.interval = interval
 
-    if not _periodic_thread:
-        _periodic_thread = PeriodicThread(name='BackgroundMonitor')
-        _periodic_thread.setDaemon(True)
-        _periodic_thread.interval = interval
-        _periodic_thread.start()
-    elif _periodic_thread.isAlive():
-        _periodic_thread.interval = interval
+    def stop_periodic_snapshots():
+        """
+        Post a stop signal to the thread that takes the periodic snapshots. The
+        function waits for the thread to terminate which can take some time
+        depending on the configured interval.
+        """
+        global _periodic_thread
 
-def stop_periodic_snapshots():
-    """
-    Post a stop signal to the thread that takes the periodic snapshots. The
-    function waits for the thread to terminate which can take some time
-    depending on the configured interval.
-    """
-    global _periodic_thread
-
-    if _periodic_thread and _periodic_thread.isAlive():
-        _periodic_thread.stop = 1
-        _periodic_thread.join()
-        _periodic_thread = None
+        if _periodic_thread and _periodic_thread.isAlive():
+            _periodic_thread.stop = 1
+            _periodic_thread.join()
+            _periodic_thread = None
 
 #
 # Snapshots
@@ -525,7 +531,8 @@ def create_snapshot(description=''):
         # happens when memory is allocated/released while this function is
         # executed but it will likely lead to inconsistencies. Either pause all
         # other threads or don't size individual objects in asynchronous mode.
-        _snapshot_lock.acquire()
+        if _snapshot_lock is not None:
+            _snapshot_lock.acquire()
 
         sizer = SCons.asizeof.Asizer()
         objs = [to.ref() for to in tracked_objects.values()]
@@ -559,7 +566,8 @@ def create_snapshot(description=''):
         footprint.append(fp)
 
     finally:
-        _snapshot_lock.release()
+        if _snapshot_lock is not None:
+            _snapshot_lock.release()
 
 #
 # Off-line Analysis
