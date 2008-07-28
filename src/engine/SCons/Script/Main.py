@@ -540,7 +540,7 @@ class HeapmonitorStats(Stats):
         pass
     def do_print(self):
         if self.profile:
-            SCons.Heapmonitor.dump_stats(open(self.profile, 'w'))
+            SCons.Heapmonitor.dump_stats(self.profile)
         else:
             SCons.Heapmonitor.print_stats(self.outfp)
 
