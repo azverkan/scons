@@ -40,7 +40,6 @@ import SCons.Builder
 import SCons.Errors
 import SCons.Tool
 
-
 def InstallPython(env, target=None, source=None, dir=None, **kw):
     """InstallPython creates .pyc or .pyo files for .py source files
     and adds them to the list of targets along with the source files.
@@ -83,16 +82,16 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
         import glob
 
     if env['TARGETSUFFIX'] == 'PYO':
-        pysuffix = 'o'
+        targetsuffix = 'o'
     else:
-        pysuffix = 'c'
+        targetsuffix = 'c'
 
     PIB = PythonInstallBuilder
 
     for dnode in dnodes:
         for src in sources:
             # add *.py and *.pyc files from a directory to tgt list
-            if isinstance(src, SCons.Node.FS.Dir) and pysuffix == 'c':
+            if isinstance(src, SCons.Node.FS.Dir) and targetsuffix == 'c':
                 compileall.compile_dir(str(src), maxlevels = 0, quiet = 1)
                 globpath = src.path + os.sep + '*.py'
                 py_and_pycs = glob.glob(globpath) + glob.glob(globpath+'c')
@@ -113,8 +112,8 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
                     tgt.extend(apply(PIB, (env, py_tgt, py_src), kw))
 
                     # add '.pyo' file to tgt list
-                    pyo_src = env.fs.Entry(py_file + pysuffix)
-                    pyo_tgt = env.fs.Entry(target_path + pysuffix, dnode)
+                    pyo_src = env.fs.Entry(py_file + targetsuffix)
+                    pyo_tgt = env.fs.Entry(target_path + targetsuffix, dnode)
                     tgt.extend(apply(PIB, (env, pyo_tgt, pyo_src), kw))
                 act = SCons.Action.CommandAction('@$PYCOM %s' % (' '.join(to_compile)))
                 act([], [], env)
@@ -125,10 +124,10 @@ def InstallPython(env, target=None, source=None, dir=None, **kw):
                 tgt.extend(apply(PIB, (env, target, src), kw))
 
                 # .pyc or .pyo source and target files
-                pyco_src = env.fs.Entry(src.path + pysuffix)
-                pyco_tgt = env.fs.Entry(target.path + pysuffix)
+                pyco_src = env.fs.Entry(src.path + targetsuffix)
+                pyco_tgt = env.fs.Entry(target.path + targetsuffix)
 
-                if pysuffix == 'c':
+                if targetsuffix == 'c':
                     py_compile.compile(src.path)
                 else:
                     act = SCons.Action.CommandAction('@$PYCOM %s' % (src.path))
@@ -158,7 +157,7 @@ def generate(env):
     env['PYCOM'] = '$PYTHON $PYO_FLAGS $PYO_CMD '
     env['PYCOMSTR'] = 'Install file: "$SOURCE" as "$TARGET"'
 
-    env['TARGETSUFFIX'] = 'PYC'
+    env['TARGETSUFFIX'] = 'PYC' # generate '.pyc' files by default
     env['PYTHONSUFFIX'] = '.py'
     env['BUILDERS']['InstallPython'] =  InstallPython
 
