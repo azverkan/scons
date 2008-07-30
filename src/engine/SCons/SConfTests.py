@@ -663,6 +663,10 @@ int main() {
             assert ret, ret
             ret = sconf.CheckPythonHeaders()
             assert ret, ret
+            ret = sconf.CheckPythonModule('sys')
+            assert ret, ret
+            ret = sconf.CheckPythonModule('thismoduledoesnotexist')
+            assert not ret, ret
             self.scons_env['CPPPATH']
             self.scons_env['PYTHON']
             self.scons_env['PYTHON_VERSION']
