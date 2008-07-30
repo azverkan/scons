@@ -415,6 +415,7 @@ class SConfBase:
                  'CheckLibWithHeader' : CheckLibWithHeader,
                  'CheckPython'        : CheckPython,
                  'CheckPythonHeaders' : CheckPythonHeaders,
+                 'CheckPythonModule'  : CheckPythonModule
                }
         self.AddTests(default_tests)
         self.AddTests(custom_tests)
@@ -1102,6 +1103,32 @@ def CheckPythonHeaders(context):
     if not result: # if headers not found, take it back
         context.env.Replace(CPPPATH=old_cpp_path)
     context.did_show_result = 1 # CheckCHeader prints the result
+    context.Result(result)
+    return result
+
+
+def CheckPythonModule(context, modulename):
+    """Check for the existence of module 'modulename'.
+
+    This test requires that CheckPython was previously executed and
+    successful."""
+
+    pycmd = "import %s" % (modulename)
+    python = context.env['PYTHON']
+    context.Message('Checking for python module %s...' % (modulename))
+    try:
+        result = Popen([python, "-c", pycmd], stdout=PIPE, stderr=PIPE).wait()
+    except NameError:
+        # os.popen* functions can't return the exit status from the child
+        # processes, so what we actually do is to check for the output
+        # (which is an error message or nothing if the module was successfully
+        # imported).
+        pyoutput = os.popen4("%s -c '%s'" % (python, pycmd))
+        result = pyoutput[1].readlines()
+        pyoutput[0].close()
+        pyoutput[1].close()
+
+    result = not result
     context.Result(result)
     return result
 
