@@ -105,7 +105,7 @@ def GenericStripComments(filename, patterns, quotings=('"', "'"), comment_first_
     start with. For C-like comments comment_first_chars is equal to
     ('//', '/\*').
 
-    When 'preprocessor' is True GenericStripComments won't strip
+    When 'preprocessor' is True GenericStripComments() won't strip
     whitespaces from the lines that start with '#' sign.
     """
 
