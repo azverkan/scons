@@ -48,7 +48,6 @@ import time
 import cStringIO
 
 import SCons.Action
-import SCons.Comments
 from SCons.Debug import logInstanceCreation
 import SCons.Errors
 import SCons.Memoize
