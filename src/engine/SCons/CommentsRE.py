@@ -218,10 +218,14 @@ def StripDComments(filename):
     Open the file 'filename', get the contents, strip the comments
     and return source code.
     
-    Works for '//', '/* */' and '/+ +/' comments."""
+    Works for '//', '/* */' and '/+ +/' comments.
 
+    Known issues: StripDComments() won't work properly for nested
+    /+ +/ comments. For a comment like this: "/+ a /+ b +/ c +/"
+    StripDComments() will return " c +/" instead of empty string."""
+    
     return GenericStripComments(filename, (d_comment, c_comment, cxx_comment),
-                                     comment_first_chars = ('/\+', '/\*', '//'))
+                                    comment_first_chars = ('/\+', '/\*', '//'))
 
 
 def StripFortranComments(filename):
