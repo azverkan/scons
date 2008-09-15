@@ -1,9 +1,4 @@
-"""SCons
-
-The main package for the SCons software construction utility.
-
-"""
-
+#!/usr/bin/env python
 #
 # __COPYRIGHT__
 #
@@ -29,15 +24,39 @@ The main package for the SCons software construction utility.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-__version__ = "__VERSION__"
+"""
+Verify the ability to make a SConsignFile() in a non-existent
+subdirectory.
+"""
 
-__build__ = "__BUILD__"
+import TestSCons
 
-__buildsys__ = "__BUILDSYS__"
+test = TestSCons.TestSCons()
 
-__date__ = "__DATE__"
+test.write('SConstruct', """
+import SCons.dblite
+env = Environment()
+env.SConsignFile("sub/dir/sconsign", SCons.dblite)
+env.Install('bar', 'foo.txt')
+""")
 
-__developer__ = "__DEVELOPER__"
+test.write('foo.txt', "Foo\n")
 
-# make sure compatibility is always in place
-import SCons.compat
+expect = test.wrap_stdout(read_str = 'Mkdir("sub/dir")\n',
+              build_str = 'Install file: "foo.txt" as "bar/foo.txt"\n')
+
+test.run(options='-n', stdout=expect)
+
+test.must_not_exist(['bar', 'foo.txt'])
+
+test.must_not_exist('sub')
+test.must_not_exist(['sub', 'dir'])
+test.must_not_exist(['sub', 'dir', '.sconsign.dblite'])
+
+test.run(stdout=expect)
+
+test.must_match(['bar', 'foo.txt'], "Foo\n")
+
+test.must_exist(['sub', 'dir', 'sconsign.dblite'])
+
+test.pass_test()

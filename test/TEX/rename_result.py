@@ -25,64 +25,54 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify execution of custom test case.
-The old code base would not be able to fail the test
+Validate that we can rename the output from latex to the
+target name provided by the user.
 """
 
+import os
+import os.path
+import string
+import sys
 import TestSCons
 
-_exe = TestSCons._exe
-_obj = TestSCons._obj
 _python_ = TestSCons._python_
 
 test = TestSCons.TestSCons()
 
-dvips = test.where_is('dvips')
 latex = test.where_is('latex')
 
-if not dvips or not latex:
-    test.skip_test("Could not find dvips or latex; skipping test(s).\n")
+if not latex:
+    test.skip_test('could not find latex; skipping test\n')
 
-NCR = test.NCR  # non-cached rebuild
-
-#----------------
-# 'lmodern' package for LaTeX available?
-#  misspell package name to ensure failure
-
-test.write('SConstruct', r"""
-lmodern_test_text = r'''
-\documentclass{article}
-\usepackage{lmodernD}
-\title{Mytitle}
-\author{Jane Doe}
-\begin{document}
-   \maketitle
-   Hello world!
-\end{document}
-'''
-
-def CheckLModern(context):
-    context.Message("Checking for lmodern...")
-    b = context.env.DVI
-    is_ok = context.TryBuild(b,lmodern_test_text,'.tex')
-    context.Result(is_ok)
-    return is_ok
-
+test.write('SConstruct', """
 import os
-ENV = { 'PATH' : os.environ['PATH'] }
-env = Environment(ENV = ENV)
-env['TEXINPUTS'] = '.'
-conf = Configure( env, custom_tests={'CheckLModern' : CheckLModern} )
-conf.CheckLModern()
-env = conf.Finish()
+ENV = { 'PATH' : os.environ['PATH'],
+        'TEXINPUTS' : [ 'subdir', os.environ.get('TEXINPUTS', '') ] }
+foo = Environment(ENV = ENV)
+foo.DVI(target = 'foobar.dvi', source = 'foo.ltx')
+foo.PDF(target = 'bar.xyz', source = 'bar.ltx')
 """ % locals())
 
-test.run()
+test.write('foo.ltx', r"""
+\documentclass{letter}
+\begin{document}
+This is the foo.ltx file.
+\end{document}
+""")
 
-test.checkLogAndStdout(["Checking for lmodern..."],
-                      ["no"],
-                      [[(('', NCR), )]],
-                       "config.log", ".sconf_temp", "SConstruct")
+test.write('bar.ltx', r"""
+\documentclass{letter}
+\begin{document}
+This is the bar.ltx file.
+\end{document}
+""")
 
+test.run(arguments = '.', stderr = None)
+
+test.must_exist('foobar.dvi')
+test.must_not_exist('foo.dvi')
+
+test.must_exist('bar.xyz')
+test.must_not_exist('bar.pdf')
 
 test.pass_test()

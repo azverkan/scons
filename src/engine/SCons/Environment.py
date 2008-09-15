@@ -534,13 +534,9 @@ class SubstitutionEnvironment:
         # if the command is a list, assume it's been quoted
         # othewise force a shell
         if not SCons.Util.is_List(command): kw['shell'] = True
-        # a SubstutionEnvironment has no ENV, so only add it
-        # to the args if it exists
-        e = self._dict.get('ENV')
-        if e: kw['env'] = e
         # run constructed command
-        #FUTURE p = subprocess.Popen(command, **kw)
-        p = apply(subprocess.Popen, (command,), kw)
+        #FUTURE p = SCons.Action._subproc(self, command, **kw)
+        p = apply(SCons.Action._subproc, (self, command), kw)
         out = p.stdout.read()
         p.stdout.close()
         err = p.stderr.read()
@@ -1914,6 +1910,11 @@ class Base(SubstitutionEnvironment):
             name = self.subst(name)
             if not os.path.isabs(name):
                 name = os.path.join(str(self.fs.SConstruct_dir), name)
+        if name:
+            name = os.path.normpath(name)
+            sconsign_dir = os.path.dirname(name)
+            if sconsign_dir and not os.path.exists(sconsign_dir):
+                self.Execute(SCons.Defaults.Mkdir(sconsign_dir))
         SCons.SConsign.File(name, dbm_module)
 
     def SideEffect(self, side_effect, target):
