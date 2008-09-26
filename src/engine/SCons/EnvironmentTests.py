@@ -840,6 +840,30 @@ sys.exit(0)
         assert env['A'] == ['aaa'], env['A']
         assert env['B'] == ['bbb'], env['B']
 
+#     def test_MergeShellPaths(self):
+#         """Test the MergeShellPaths() method
+#         """
+#         env = Environment()
+#         env.MergeShellPaths({})
+#         assert not env['ENV'].has_key('INCLUDE'), env['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'})
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'})
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'xyz'})
+#         assert env['ENV']['INCLUDE'] == r'xyz%sc:\Program Files\Stuff'%os.pathsep, env['ENV']['INCLUDE']
+
+#         env = Environment()
+#         env['ENV']['INCLUDE'] = 'xyz'
+#         env.MergeShellPaths({'INCLUDE':['c:/inc1', 'c:/inc2']} )
+#         assert env['ENV']['INCLUDE'] == r'c:/inc1%sc:/inc2%sxyz'%(os.pathsep, os.pathsep), env['ENV']['INCLUDE']
+
+#         # test prepend=0
+#         env = Environment()
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'}, prepend=0)
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'xyz'}, prepend=0)
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff%sxyz'%os.pathsep, env['ENV']['INCLUDE']
 
 
 class BaseTestCase(unittest.TestCase,TestEnvironmentFixture):
@@ -1531,6 +1555,8 @@ def exists(env):
         env1.AppendENVPath('PATH',r'C:\dir\num\three', sep = ';')
         env1.AppendENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';')
         env1.AppendENVPath('MYPATH',r'C:\mydir\num\one','MYENV', sep = ';')
+        # this should do nothing since delete_existing is 0
+        env1.AppendENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';', delete_existing=0)
         assert(env1['ENV']['PATH'] == r'C:\dir\num\one;C:\dir\num\two;C:\dir\num\three')
         assert(env1['MYENV']['MYPATH'] == r'C:\mydir\num\two;C:\mydir\num\three;C:\mydir\num\one')
 
@@ -2165,6 +2191,8 @@ f5: \
         env1.PrependENVPath('PATH',r'C:\dir\num\three',sep = ';')
         env1.PrependENVPath('MYPATH',r'C:\mydir\num\three','MYENV',sep = ';')
         env1.PrependENVPath('MYPATH',r'C:\mydir\num\one','MYENV',sep = ';')
+        # this should do nothing since delete_existing is 0
+        env1.PrependENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';', delete_existing=0)
         assert(env1['ENV']['PATH'] == r'C:\dir\num\three;C:\dir\num\two;C:\dir\num\one')
         assert(env1['MYENV']['MYPATH'] == r'C:\mydir\num\one;C:\mydir\num\three;C:\mydir\num\two')
 
@@ -3022,6 +3050,7 @@ def generate(env):
         env = self.TestEnvironment(FOO = 'SConsign',
                           BAR = os.path.join(os.sep, 'File'))
         env.fs = MyFS()
+        env.Execute = lambda action: None
 
         try:
             fnames = []
@@ -3034,32 +3063,36 @@ def generate(env):
             SCons.SConsign.File = capture
 
             env.SConsignFile('foo')
-            assert fnames[0] == os.path.join(os.sep, 'dir', 'foo'), fnames
-            assert dbms[0] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', 'foo'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('$FOO')
-            assert fnames[1] == os.path.join(os.sep, 'dir', 'SConsign'), fnames
-            assert dbms[1] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', 'SConsign'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('/$FOO')
-            assert fnames[2] == '/SConsign', fnames
-            assert dbms[2] == None, dbms
+            assert fnames[-1] == os.sep + 'SConsign', fnames
+            assert dbms[-1] == None, dbms
+
+            env.SConsignFile(os.sep + '$FOO')
+            assert fnames[-1] == os.sep + 'SConsign', fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('$BAR', 'x')
-            assert fnames[3] == os.path.join(os.sep, 'File'), fnames
-            assert dbms[3] == 'x', dbms
+            assert fnames[-1] == os.path.join(os.sep, 'File'), fnames
+            assert dbms[-1] == 'x', dbms
 
             env.SConsignFile('__$BAR', 7)
-            assert fnames[4] == os.path.join(os.sep, 'dir', '__', 'File'), fnames
-            assert dbms[4] == 7, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', '__', 'File'), fnames
+            assert dbms[-1] == 7, dbms
 
             env.SConsignFile()
-            assert fnames[5] == os.path.join(os.sep, 'dir', '.sconsign'), fnames
-            assert dbms[5] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', '.sconsign'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile(None)
-            assert fnames[6] == None, fnames
-            assert dbms[6] == None, dbms
+            assert fnames[-1] == None, fnames
+            assert dbms[-1] == None, dbms
         finally:
             SCons.SConsign.File = save_SConsign_File
 

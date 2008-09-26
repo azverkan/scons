@@ -59,6 +59,8 @@ import SCons.Warnings
 
 from SCons.Debug import Trace
 
+do_store_info = True
+
 # The max_drift value:  by default, use a cached signature value for
 # any file that's been untouched for more than two days.
 default_max_drift = 2*24*60*60
@@ -2012,13 +2014,14 @@ class RootDir(Dir):
             dir_name, file_name = os.path.split(p)
             dir_node = self._lookup_abs(dir_name, Dir)
             result = klass(file_name, dir_node, self.fs)
-            self._lookupDict[k] = result
-            dir_node.entries[_my_normcase(file_name)] = result
-            dir_node.implicit = None
 
             # Double-check on disk (as configured) that the Node we
             # created matches whatever is out there in the real world.
             result.diskcheck_match()
+
+            self._lookupDict[k] = result
+            dir_node.entries[_my_normcase(file_name)] = result
+            dir_node.implicit = None
         else:
             # There is already a Node for this path name.  Allow it to
             # complain if we were looking for an inappropriate type.
@@ -2269,7 +2272,8 @@ class File(Base):
         # This accomodates "chained builds" where a file that's a target
         # in one build (SConstruct file) is a source in a different build.
         # See test/chained-build.py for the use case.
-        self.dir.sconsign().store_info(self.name, self)
+        if do_store_info:
+            self.dir.sconsign().store_info(self.name, self)
 
     convert_copy_attrs = [
         'bsources',
@@ -2395,7 +2399,7 @@ class File(Base):
 
         try:
             sconsign_entry = self.dir.sconsign().get_entry(self.name)
-        except (KeyError, OSError):
+        except (KeyError, EnvironmentError):
             import SCons.SConsign
             sconsign_entry = SCons.SConsign.SConsignEntry()
             sconsign_entry.binfo = self.new_binfo()
