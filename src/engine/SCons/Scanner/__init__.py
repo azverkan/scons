@@ -29,6 +29,7 @@ The Scanner package for the SCons software construction utility.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
+import os
 import re
 import string
 
@@ -393,12 +394,29 @@ class ClassicCPP(Classic):
     the contained filename in group 1.
     """
     def find_include(self, include, source_dir, path):
-        if include[0] == '"':
-            paths = (source_dir,) + tuple(path)
-        else:
-            paths = tuple(path) + (source_dir,)
+        n = None
 
-        n = SCons.Node.FS.find_file(include[1], paths)
+        if include[0] == '"':
+            filedir, filename = os.path.split(include[1])
+            if filedir:
+                sd = SCons.Node.FS.filedir_lookup(source_dir, filedir)
+                if sd:
+                    source_dir = sd
+            n, d = source_dir.srcdir_find_file(filename)
+            if n:
+                return n, include[1]
+
+        n = SCons.Node.FS.find_file(include[1], path)
+        if n:
+            return n, include[1]
+
+        if include[0] != '"':
+            filedir, filename = os.path.split(include[1])
+            if filedir:
+                sd = SCons.Node.FS.filedir_lookup(source_dir, filedir)
+                if sd:
+                    source_dir = sd
+            n, d = source_dir.srcdir_find_file(filename)
 
         return n, include[1]
 

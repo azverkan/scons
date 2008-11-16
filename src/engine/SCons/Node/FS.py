@@ -3026,7 +3026,10 @@ class FileFinder:
 
         return result
 
-find_file = FileFinder().find_file
+_FF = FileFinder()
+filedir_lookup = _FF.filedir_lookup
+find_file = _FF.find_file
+del _FF
 
 
 def invalidate_node_memos(targets):

@@ -66,7 +66,7 @@ headers = ['t1.h',
            'MSG00409.bin','MSG00410.bin','testtypelib.tlb','testregis.rgs']
 
 for h in headers:
-    test.write(h, " ")
+    test.write(h, "\n")
 
 
 # define some helpers:
@@ -122,7 +122,7 @@ def deps_match(self, deps, headers):
 
 class RCScannerTestCase1(unittest.TestCase):
     def runTest(self):
-        path = []
+        path = ()
         env = DummyEnvironment(RCSUFFIXES=['.rc','.rc2'],
                                CPPPATH=path)
         s = SCons.Scanner.RC.RCScan()
@@ -132,7 +132,7 @@ class RCScannerTestCase1(unittest.TestCase):
 
 class RCScannerTestCase2(unittest.TestCase):
     def runTest(self):
-        path = []
+        path = ()
         env = DummyEnvironment(RCSUFFIXES=['.rc','.rc2'],
                                CPPPATH=path)
         s = SCons.Scanner.RC.RCScan()

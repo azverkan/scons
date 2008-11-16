@@ -551,6 +551,8 @@ class ClassicCPPTestCase(unittest.TestCase):
         env = DummyEnvironment()
         s = SCons.Scanner.ClassicCPP("Test", [], None, "")
 
+        foo = DummyNode('foo')
+
         def _find_file(filename, paths):
             return paths[0]+'/'+filename
 
@@ -558,11 +560,13 @@ class ClassicCPPTestCase(unittest.TestCase):
         SCons.Node.FS.find_file = _find_file
 
         try:
-            n, i = s.find_include(('"', 'aaa'), 'foo', ('path',))
+            foo.srcdir_find_file = lambda x: ('foo/aaa', None)
+            n, i = s.find_include(('"', 'aaa'), foo, ('path',))
             assert n == 'foo/aaa', n
             assert i == 'aaa', i
 
-            n, i = s.find_include(('<', 'bbb'), 'foo', ('path',))
+            foo.srcdir_find_file = lambda x: (None, None)
+            n, i = s.find_include(('<', 'bbb'), foo, ('path',))
             assert n == 'path/bbb', n
             assert i == 'bbb', i
 
