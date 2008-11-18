@@ -226,7 +226,7 @@ class CScannerTestCase1(unittest.TestCase):
         s = SCons.Scanner.C.CScanner()
         path = s.path(env)
         deps = s(env.File('f1.cpp'), env, path)
-        headers = ['f1.h', 'f2.h']
+        headers = ['f1.h', 'fi.h', 'f2.h']
         deps_match(self, deps, headers)
 
 class CScannerTestCase2(unittest.TestCase):
@@ -279,8 +279,8 @@ class CScannerTestCase5(unittest.TestCase):
         # scanned, essential for cooperation with VariantDir functionality.
         assert n.rexists_called
         
-        headers =  ['f1.h', 'f2.h', 'f3-test.h',
-                    'd1/f1.h', 'd1/f2.h', 'd1/f3-test.h']
+        headers =  ['f1.h', 'f2.h', 'f3-test.h', 'fi.h',
+                    'd1/f1.h', 'd1/f2.h', 'd1/f3-test.h', 'fj.h']
         deps_match(self, deps, headers)
 
 class CScannerTestCase6(unittest.TestCase):

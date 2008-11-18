@@ -225,7 +225,10 @@ def cleanup_test():
         test.unlink(F)  # will be repopulated during clean operation
     test.run(arguments = '-c')
     for F in builddir_srcnodes:
-        test.unlink(F)
+        try:
+            test.unlink(F)
+        except OSError:
+            pass
     for name in build_nodes:
         test.must_not_exist(test.workpath(name))
 

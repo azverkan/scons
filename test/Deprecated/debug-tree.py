@@ -91,8 +91,8 @@ tree1 = """
 +-Foo.xxx
   +-Foo.ooo
   | +-Foo.c
-  | +-Foo.h
   | +-Bar.h
+  | +-Foo.h
   | +-%(CC)s
   +-Bar.ooo
   | +-Bar.c
@@ -122,14 +122,14 @@ tree2 = """
   +-Foo.h
   +-Foo.ooo
   | +-Foo.c
-  | +-Foo.h
   | +-Bar.h
+  | +-Foo.h
   | +-%(CC)s
   +-Foo.xxx
   | +-Foo.ooo
   | | +-Foo.c
-  | | +-Foo.h
   | | +-Bar.h
+  | | +-Foo.h
   | | +-%(CC)s
   | +-Bar.ooo
   | | +-Bar.c

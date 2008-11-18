@@ -405,6 +405,9 @@ class SubstitutionEnvironment:
     def items(self):
         return self._dict.items()
 
+    def __hash__(self):
+        return id(self)
+
     def arg2nodes(self, args, node_factory=_null, lookup_list=_null, **kw):
         if node_factory is _null:
             node_factory = self.fs.File

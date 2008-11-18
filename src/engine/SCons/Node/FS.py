@@ -2448,27 +2448,27 @@ class File(Base):
     def rel_path(self, other):
         return self.dir.rel_path(other)
 
-    def _get_found_includes_key(self, env, scanner, path):
-        return (id(env), id(scanner), path)
+    #def _get_found_includes_key(self, env, scanner, path):
+    #    return (id(env), id(scanner), path)
 
-    memoizer_counters.append(SCons.Memoize.CountDict('get_found_includes', _get_found_includes_key))
+    #memoizer_counters.append(SCons.Memoize.CountDict('get_found_includes', _get_found_includes_key))
 
     def get_found_includes(self, env, scanner, path):
         """Return the included implicit dependencies in this file.
         Cache results so we only scan the file once per path
         regardless of how many times this information is requested.
         """
-        memo_key = (id(env), id(scanner), path)
-        try:
-            memo_dict = self._memo['get_found_includes']
-        except KeyError:
-            memo_dict = {}
-            self._memo['get_found_includes'] = memo_dict
-        else:
-            try:
-                return memo_dict[memo_key]
-            except KeyError:
-                pass
+        #memo_key = (id(env), id(scanner), path)
+        #try:
+        #    memo_dict = self._memo['get_found_includes']
+        #except KeyError:
+        #    memo_dict = {}
+        #    self._memo['get_found_includes'] = memo_dict
+        #else:
+        #    try:
+        #        return memo_dict[memo_key]
+        #    except KeyError:
+        #        pass
 
         if scanner:
             # result = [n.disambiguate() for n in scanner(self, env, path)]
@@ -2477,9 +2477,20 @@ class File(Base):
         else:
             result = []
 
-        memo_dict[memo_key] = result
+        #memo_dict[memo_key] = result
 
         return result
+
+#    def get_implicit_deps(self, env, scanner, path):
+#        """Return a list of implicit dependencies for this node.
+#
+#        This method exists to handle recursive invocation of the scanner
+#        on the implicit dependencies returned by the scanner, if the
+#        scanner's recursive flag says that we should.
+#        """
+#        if not scanner:
+#            return []
+#        return scanner(self, env, path)
 
     def _createDir(self):
         # ensure that the directories for this node are

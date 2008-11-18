@@ -530,7 +530,9 @@ class Node:
         on the implicit dependencies returned by the scanner, if the
         scanner's recursive flag says that we should.
         """
+        #Trace('get_implicit_deps(%s)\n' % self)
         if not scanner:
+            Trace('get_implicit_deps(%s):  return []\n' % self)
             return []
 
         # Give the scanner a chance to select a more specific scanner
@@ -545,12 +547,14 @@ class Node:
             n = nodes.pop(0)
             d = filter(lambda x, seen=seen: not seen.has_key(x),
                        n.get_found_includes(env, scanner, path))
+            #Trace('  %s: %s\n' % (n, map(str, d)))
             if d:
                 deps.extend(d)
                 for n in d:
                     seen[n] = 1
                 nodes.extend(scanner.recurse_nodes(d))
 
+        #Trace('get_implicit_deps(%s):  deps %s\n' % (self, deps))
         return deps
 
     def get_env_scanner(self, env, kw={}):
@@ -597,12 +601,14 @@ class Node:
         # Don't bother scanning non-derived files, because we don't
         # care what their dependencies are.
         # Don't scan again, if we already have scanned.
+        #Trace('scan(%s):\n' % self)
         if not self.implicit is None:
             return
         self.implicit = []
         self.implicit_set = set()
         self._children_reset()
         if not self.has_builder():
+            #Trace('scan(%s):  return 607\n')
             return
 
         build_env = self.get_build_env()
@@ -632,13 +638,16 @@ class Node:
                 self.implicit_set = set()
 
         # Have the executor scan the sources.
+        #Trace('scan(%s):  scan_sources()\n' % self)
         executor.scan_sources(self.builder.source_scanner)
 
         # If there's a target scanner, have the executor scan the target
         # node itself and associated targets that might be built.
+        #Trace('scan(%s):  scan_targets()\n' % self)
         scanner = self.get_target_scanner()
         if scanner:
             executor.scan_targets(scanner)
+        #Trace('scan(%s):  IMPLICIT %s\n' % (self, map(str, self.implicit)))
 
     def scanner_key(self):
         return None

@@ -604,7 +604,7 @@ class Taskmaster:
                 # raise the exception when the Task is "executed."
                 self.ready_exc = sys.exc_info()
                 if S: S.problem = S.problem + 1
-                if T: T.write('Taskmaster:        exception %s while scanning children.\n'%s)
+                if T: T.write('Taskmaster:        exception %s while scanning children.\n'%e)
                 return node
 
             children_not_visited = []

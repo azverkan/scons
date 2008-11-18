@@ -36,6 +36,7 @@ from SCons.Debug import logInstanceCreation
 import SCons.Errors
 import SCons.Memoize
 
+from SCons.Debug import Trace
 
 class Executor:
     """A class for controlling instances of executing an action.
@@ -226,6 +227,7 @@ class Executor:
         self.scan(scanner, self.targets)
 
     def scan_sources(self, scanner):
+        #Trace('scan_sources() %s\n' % map(str, self.get_sources()))
         if self.sources:
             self.scan(scanner, self.get_sources())
 
@@ -239,6 +241,7 @@ class Executor:
 
         deps = []
         if scanner:
+            #Trace('Executor.scan():  scanner %s\n' % scanner)
             for node in node_list:
                 node.disambiguate()
                 s = scanner.select(node)
@@ -247,6 +250,7 @@ class Executor:
                 path = self.get_build_scanner_path(s)
                 deps.extend(node.get_implicit_deps(env, s, path))
         else:
+            #Trace('Executor.scan():  no scanner\n')
             kw = self.get_kw()
             for node in node_list:
                 node.disambiguate()

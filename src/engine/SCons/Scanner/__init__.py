@@ -36,6 +36,7 @@ import string
 import SCons.Node.FS
 import SCons.Util
 
+from SCons.Debug import Trace
 
 class _Null:
     pass
@@ -406,7 +407,12 @@ class ClassicCPP(Classic):
             if n:
                 return n, include[1]
 
-        n = SCons.Node.FS.find_file(include[1], path)
+        try:
+            find_file = path.find_file
+        except AttributeError:
+            n = SCons.Node.FS.find_file(include[1], path)
+        else:
+            n = find_file()
         if n:
             return n, include[1]
 
@@ -422,3 +428,208 @@ class ClassicCPP(Classic):
 
     def sort_key(self, include):
         return SCons.Node.FS._my_normcase(string.join(include))
+
+
+class MyPathList:
+    def __init__(self, dirs):
+        self.dirs = dirs
+        self.lookup = {}
+    def find_file(self, filename):
+        #open('/dev/tty', 'w').write('filename %s\n' % repr(filename))
+        try:
+            lookup = self.lookup
+        except AttributeError:
+            lookup = {}
+            self.dirs.reverse()
+            for dir in self.dirs:
+                lookup.update(dir.entries)
+            self.lookup = lookup
+        try:
+            return lookup[filename]
+        except KeyError:
+            pass
+        node = SCons.Node.FS.find_file(filename, self.dirs)
+        lookup[filename] = node
+        return node
+    def __hash__(self):
+        return id(self)
+
+NullMyPathList = MyPathList(())
+        
+class NewFindPathDirs:
+    """A class to bind a specific *PATH variable name to a function that
+    will return all of the *path directory Nodes."""
+    def __init__(self, variable):
+        self.variable = variable
+        self.pathlists = {}
+    def __call__(self, env, dir=None, target=None, source=None, argument=None):
+        import SCons.PathList
+        try:
+            path = env[self.variable]
+        except KeyError:
+            return NullMyPathList
+
+        dir = dir or env.fs._cwd
+        path = SCons.PathList.PathList(path).subst_path(env, target, source)
+        pathkey = tuple(dir.Rfindalldirs(path))
+        try:
+            mpl = self.pathlists[pathkey]
+        except KeyError:
+            mpl = MyPathList(pathkey)
+            self.pathlists[pathkey] = mpl
+        return mpl
+
+class NewScanner:
+
+    if SCons.Memoize.use_memoizer:
+        __metaclass__ = SCons.Memoize.Memoized_Metaclass
+
+    memoizer_counters = []
+
+    #def __init__(self,
+    #             function,
+    #             name = "NONE",
+    #             argument = _null,
+    #             skeys = _null,
+    #             path_function = None,
+    #             node_class = SCons.Node.FS.Entry,
+    #             node_factory = None,
+    #             scan_check = None,
+    #             recursive = None):
+
+    def __init__(self, name, suffixes, path_variable, regex, *args, **kw):
+        self._memo = {}
+        self.cre = re.compile(regex, re.M)
+        self.path_function = NewFindPathDirs(path_variable)
+        self.skeys = suffixes
+        self.function = None
+
+    def sort_key(self, include):
+        return SCons.Node.FS._my_normcase(string.join(include))
+
+    def path(self, env, dir=None, target=None, source=None):
+        return self.path_function(env, dir, target, source)
+
+    def find_file(self, include, path, source_dir):
+        n = None
+
+        if include[0] == '"':
+            filedir, filename = os.path.split(include[1])
+            if filedir:
+                sd = SCons.Node.FS.filedir_lookup(source_dir, filedir)
+                if sd:
+                    source_dir = sd
+            n, d = source_dir.srcdir_find_file(filename)
+            if n:
+                #Trace('find_file1(%s) returning %s %s\n' % (include, n, repr(n)))
+                #Trace('find_file1(%s) %s\n' % (include, n.get_state()))
+                return n, include[1]
+
+        n = path.find_file(include[1])
+        if n:
+            #Trace('find_file2(%s) returning %s\n' % (include, n))
+            return n, include[1]
+
+        if include[0] != '"':
+            filedir, filename = os.path.split(include[1])
+            if filedir:
+                sd = SCons.Node.FS.filedir_lookup(source_dir, filedir)
+                if sd:
+                    source_dir = sd
+            n, d = source_dir.srcdir_find_file(filename)
+
+        #Trace('find_file3(%s) returning %s\n' % (include, n))
+        return n, include[1]
+
+    def _scan_file_key(self, node, env, path):
+        return (node, env, path)
+        
+    memoizer_counters.append(SCons.Memoize.CountDict('scan_file', _scan_file_key))
+
+    def scan_file(self, node, env, path = NullMyPathList):
+        #memo_key = self._scan_file_key(node, env, path)
+        #try:
+        #    memo_dict = self._memo['scan_file']
+        #except KeyError:
+        #    memo_dict = {}
+        #    self._memo['scan_file'] = memo_dict
+        #else:
+        #    try:
+        #        return memo_dict[memo_key]
+        #    except KeyError:
+        #        pass
+
+        #Trace('scan_file(%s)\n' % (node,))
+
+        # TODO(sgk):  generalize this .includes caching so it doesn't
+        # assume just one scanner
+        # the old scanner used to do
+        if node.includes != None:
+            includes = node.includes
+        else:
+            #includes = self.find_include_names(node)
+            includes = self.cre.findall(node.get_contents())
+            node.includes = includes
+        #Trace('scan_file(%s):  includes %s\n' % (node, includes,))
+
+        #result = [ path.find_file(i) for i in includes ]
+        #result = filter(None, result)
+
+        #result = map(path.find_file, includes)
+        #result = filter(None, result)
+
+        result = []
+        source_dir = node.get_dir()
+        for include in includes:
+            #Trace('scan_file(%s):  include %s\n' % (node, include,))
+            n, i = self.find_file(include, path, source_dir)
+            if n is None:
+                SCons.Warnings.warn(SCons.Warnings.DependencyWarning,
+                                    "No dependency generated for file: %s (included from: %s) -- file not found" % (i, node))
+            elif not self.seen.has_key(n):
+                self.seen[n] = 1
+                result.append((self.sort_key(include), n))
+                result.extend(self.scan_file(n, env, path))
+
+        #memo_dict[memo_key] = result
+
+        #Trace('scan_file(%s) = result %s\n' % (node, result))
+        return result
+
+    def __call__(self, node, env, path = ()):
+        #Trace('__call__(%s)\n' % node)
+        self.seen = {None:1, node:1}
+        pairs = self.scan_file(node, env, path)
+        pairs.sort()
+        # TODO(1.5): 
+        # result = [ pair[1] for pair in nodes ]
+        result = []
+        for pair in pairs:
+            result.append(pair[1])
+        return result
+
+    def recurse_nodes(self, nodes):
+        return []
+
+    def add_skey(self, skey):
+        """Add a skey to the list of skeys"""
+        self.skeys.append(skey)
+
+    def get_skeys(self, env=None):
+        if env and SCons.Util.is_String(self.skeys):
+            return env.subst_list(self.skeys)[0]
+        return self.skeys
+
+    def select(self, node):
+        if SCons.Util.is_Dict(self.function):
+            key = node.scanner_key()
+            try:
+                return self.function[key]
+            except KeyError:
+                return None
+        else:
+            return self
+
+    def add_scanner(self, skey, scanner):
+        self.function[skey] = scanner
+        self.add_skey(skey)

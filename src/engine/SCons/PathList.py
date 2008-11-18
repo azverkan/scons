@@ -141,6 +141,10 @@ class _PathList:
                 result.append(value)
         return tuple(result)
 
+    def find_file(self, filename):
+        open('/dev/tty', 'w').write('hi!\n')
+        return SCons.Node.FS.find_file(filename, path)
+
 
 class PathListCache:
     """

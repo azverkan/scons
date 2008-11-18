@@ -85,8 +85,8 @@ tree1 = """
 +-Foo.xxx
   +-Foo.ooo
   | +-Foo.c
-  | +-Foo.h
   | +-Bar.h
+  | +-Foo.h
   | +-%(CC)s
   +-Bar.ooo
   | +-Bar.c
@@ -115,14 +115,14 @@ tree2 = """
   +-Foo.h
   +-Foo.ooo
   | +-Foo.c
-  | +-Foo.h
   | +-Bar.h
+  | +-Foo.h
   | +-%(CC)s
   +-Foo.xxx
   | +-Foo.ooo
   | | +-Foo.c
-  | | +-Foo.h
   | | +-Bar.h
+  | | +-Foo.h
   | | +-%(CC)s
   | +-Bar.ooo
   | | +-Bar.c
@@ -152,8 +152,8 @@ tree3 = """
   +-Foo.h
   +-Foo.ooo
   | +-Foo.c
-  | +-Foo.h
   | +-Bar.h
+  | +-Foo.h
   | +-%(CC)s
   +-Foo.xxx
   | +-[Foo.ooo]
@@ -189,8 +189,8 @@ tree4 = """
 [  B      ]+-Foo.xxx
 [  B      ]  +-Foo.ooo
 [E     C  ]  | +-Foo.c
-[E     C  ]  | +-Foo.h
 [E     C  ]  | +-Bar.h
+[E     C  ]  | +-Foo.h
 [E     C  ]  | +-%(CC)s
 [  B      ]  +-Bar.ooo
 [E     C  ]  | +-Bar.c

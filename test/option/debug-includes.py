@@ -83,8 +83,10 @@ test.write('bar.h', """
 
 includes = """
 +-foo.c
-  +-foo.h
-    +-bar.h
+  +-bar.h
+  | +-foo.h
+  |   +-[bar.h]
+  +-[foo.h]
 """
 test.run(arguments = "--debug=includes foo.obj")
 

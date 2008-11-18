@@ -119,7 +119,7 @@ def CScanner():
     # right configurability to let users pick between the scanners.
     #return SConsCPPScannerWrapper("CScanner", "CPPPATH")
 
-    cs = SCons.Scanner.ClassicCPP("CScanner",
+    cs = SCons.Scanner.NewScanner("CScanner",
                                   "$CPPSUFFIXES",
                                   "CPPPATH",
                                   '^[ \t]*#[ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")')

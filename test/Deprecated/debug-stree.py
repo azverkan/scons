@@ -87,8 +87,8 @@ stree = """
 [E B   C  ]+-foo.xxx
 [E B   C  ]  +-foo.ooo
 [E     C  ]  | +-foo.c
-[E     C  ]  | +-foo.h
 [E     C  ]  | +-bar.h
+[E     C  ]  | +-foo.h
 [E     C  ]  | +-%(CC)s
 [E B   C  ]  +-bar.ooo
 [E     C  ]  | +-bar.c
@@ -117,8 +117,8 @@ stree2 = """
 [  B      ]+-foo.xxx
 [  B      ]  +-foo.ooo
 [E     C  ]  | +-foo.c
-[E     C  ]  | +-foo.h
 [E     C  ]  | +-bar.h
+[E     C  ]  | +-foo.h
 [E     C  ]  | +-%(CC)s
 [  B      ]  +-bar.ooo
 [E     C  ]  | +-bar.c
