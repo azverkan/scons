@@ -304,7 +304,10 @@ class VariantDirTestCase(unittest.TestCase):
         class MkdirAction(Action):
             def __init__(self, dir_made):
                 self.dir_made = dir_made
-            def __call__(self, target, source, env):
+            def __call__(self, target, source, env, executor=None):
+                if executor:
+                    target = executor.get_all_targets()
+                    source = executor.get_all_sources()
                 self.dir_made.extend(target)
 
         save_Link = SCons.Node.FS.Link
@@ -2965,7 +2968,10 @@ class prepareTestCase(unittest.TestCase):
         class MkdirAction(Action):
             def __init__(self, dir_made):
                 self.dir_made = dir_made
-            def __call__(self, target, source, env):
+            def __call__(self, target, source, env, executor=None):
+                if executor:
+                    target = executor.get_all_targets()
+                    source = executor.get_all_sources()
                 self.dir_made.extend(target)
 
         dir_made = []
@@ -3243,7 +3249,8 @@ class SpecialAttrTestCase(unittest.TestCase):
         assert s == os.path.normpath('baz/sub/file.suffix'), s
         assert f.srcpath.is_literal(), f.srcpath
         g = f.srcpath.get()
-        assert isinstance(g, SCons.Node.FS.Entry), g.__class__
+        # Gets disambiguated to SCons.Node.FS.File by get_subst_proxy().
+        assert isinstance(g, SCons.Node.FS.File), g.__class__
 
         s = str(f.srcdir)
         assert s == os.path.normpath('baz/sub'), s
@@ -3277,7 +3284,8 @@ class SpecialAttrTestCase(unittest.TestCase):
         try:
             fs.Entry('eee').get_subst_proxy().no_such_attr
         except AttributeError, e:
-            assert str(e) == "Entry instance 'eee' has no attribute 'no_such_attr'", e
+            # Gets disambiguated to File instance by get_subst_proxy().
+            assert str(e) == "File instance 'eee' has no attribute 'no_such_attr'", e
             caught = 1
         assert caught, "did not catch expected AttributeError"
 

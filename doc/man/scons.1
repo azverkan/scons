@@ -1461,11 +1461,15 @@ These warnings are enabled by default.
 --warn=reserved-variable, --warn=no-reserved-variable
 Enables or disables warnings about attempts to set the
 reserved construction variable names
+.BR CHANGED_SOURCES ,
+.BR CHANGED_TARGETS ,
 .BR TARGET ,
 .BR TARGETS ,
-.BR SOURCE
+.BR SOURCE ,
+.BR SOURCES ,
+.BR UNCHANGED_SOURCES
 or
-.BR SOURCES .
+.BR UNCHANGED_TARGETS .
 These warnings are disabled by default.
 
 .TP
@@ -8624,16 +8628,25 @@ a = Action(build_it, varlist=['XXX'])
 The
 .BR Action ()
 global function
-also takes a
+can be passed the following
+optional keyword arguments
+to modify the Action object's behavior:
+
+.IP
 .B chdir
-keyword argument
-which specifies that
+The
+.B chdir
+keyword argument specifies that
 scons will execute the action
 after changing to the specified directory.
-If the chdir argument is
+If the
+.B chdir
+argument is
 a string or a directory Node,
 scons will change to the specified directory.
-If the chdir argument
+If the
+.B chdir
+argument
 is not a string or Node
 and is non-zero,
 then scons will change to the
@@ -8668,6 +8681,8 @@ a = Action("build < ${SOURCE.file} > ${TARGET.file}",
            chdir=1)
 .EE
 
+.IP
+.B exitstatfunc
 The
 .BR Action ()
 global function
@@ -8683,6 +8698,7 @@ or modified value.
 This can be used, for example,
 to specify that an Action object's
 return value should be ignored
+under special conditions
 and SCons should, therefore,
 consider that the action always suceeds:
 
@@ -8692,6 +8708,32 @@ def always_succeed(s):
     return 0
 a = Action("build < ${SOURCE.file} > ${TARGET.file}",
            exitstatfunc=always_succeed)
+.EE
+
+.IP
+.B batch_key
+The
+.B batch_key
+keyword argument can be used
+to specify that the Action can create multiple target files
+by processing multiple independent source files simultaneously.
+(The canonical example is "batch compilation"
+of multiple object files
+by passing multiple source files
+to a single invocation of a compiler
+such as Microsoft's Visual C / C++ compiler.)
+If the
+.B batch_key
+argument is any non-False Python value
+(except
+The
+.B batch_key
+argument may also be
+
+.ES
+def batch_key(action, env, target, source):
+    # 
+    return (id(action), id(env), target[0].dir)
 .EE
 
 .SS Miscellaneous Action Functions
@@ -8886,19 +8928,41 @@ prefix.
 Besides construction variables, scons provides the following
 variables for each command execution:
 
+.IP CHANGED_SOURCES
+The file names of all sources of the build command
+that have changed since the target was last built.
+
+.IP CHANGED_TARGETS
+The file names of all targets that would be built
+from sources that have changed since the target was last built.
+
+.IP SOURCE
+The file name of the source of the build command,
+or the file name of the first source
+if multiple sources are being built.
+
+.IP SOURCES
+The file names of the sources of the build command.
+
 .IP TARGET
-The file name of the target being built, or the file name of the first
-target if multiple targets are being built.
+The file name of the target being built,
+or the file name of the first target
+if multiple targets are being built.
 
 .IP TARGETS
 The file names of all targets being built.
 
-.IP SOURCE
-The file name of the source of the build command, or the file name of the
-first source if multiple sources are being built.
+.IP UNCHANGED_SOURCES
+The file names of all sources of the build command
+that have
+.I not
+changed since the target was last built.
 
-.IP SOURCES
-The file names of the sources of the build command.
+.IP UNCHANGED_TARGETS
+The file names of all targets that would be built
+from sources that have
+.I not
+changed since the target was last built.
 
 (Note that the above variables are reserved
 and may not be set in a construction environment.)

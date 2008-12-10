@@ -1089,11 +1089,12 @@ class Selector(OrderedDict):
     """A callable ordered dictionary that maps file suffixes to
     dictionary values.  We preserve the order in which items are added
     so that get_suffix() calls always return the first suffix added."""
-    def __call__(self, env, source):
-        try:
-            ext = source[0].suffix
-        except IndexError:
-            ext = ""
+    def __call__(self, env, source, ext=None):
+        if ext is None:
+            try:
+                ext = source[0].suffix
+            except IndexError:
+                ext = ""
         try:
             return self[ext]
         except KeyError:
