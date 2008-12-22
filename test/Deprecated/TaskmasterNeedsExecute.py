@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # __COPYRIGHT__
 #
@@ -23,22 +24,35 @@
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-__doc__ = """Place-holder for the old SCons.Options module hierarchy
-
-This is for backwards compatibility.  The new equivalent is the Variables/
-class hierarchy.  These will have deprecation warnings added (some day),
-and will then be removed entirely (some day).
+"""
+Verify the message about the deprecated Taskmaster.needs_task()
+method, and the ability to suppress it.
 """
 
-import SCons.Variables
-import SCons.Warnings
+import TestSCons
 
-warned = False
+test = TestSCons.TestSCons(match = TestSCons.match_re_dotall)
 
-def PackageOption(*args, **kw):
-    global warned
-    if not warned:
-        msg = "The PackageOption() function is deprecated; use the PackageVariable() function instead."
-        SCons.Warnings.warn(SCons.Warnings.DeprecatedOptionsWarning, msg)
-        warned = True
-    return apply(SCons.Variables.PackageVariable, args, kw)
+test.write('SConstruct', """
+import SCons.Taskmaster
+tm = SCons.Taskmaster.Taskmaster()
+task = SCons.Taskmaster.Task(tm, [], True, None)
+task.needs_execute()
+""")
+
+expect = """
+scons: warning: Direct use of the Taskmaster.Task class will be deprecated
+\tin a future release.
+"""
+
+test.run(arguments = '.')
+
+test.run(arguments = '--warn=taskmaster-needs-execute .',
+         stderr = TestSCons.re_escape(expect) + TestSCons.file_expr)
+
+test.run(arguments = '--warn=no-taskmaster-needs-execute .')
+
+test.run(arguments = '--warn=future-deprecated .',
+         stderr = TestSCons.re_escape(expect) + TestSCons.file_expr)
+
+test.pass_test()

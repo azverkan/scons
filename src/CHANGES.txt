@@ -17,15 +17,41 @@ RELEASE 1.X - XXX
 
   From Steven Knight:
 
+    - Print the message, "scons: Build interrupted." on error output,
+      not standard output.
+
+    - Add a --warn=future-deprecated option for advance warnings about
+      deprecated features that still have warnings hidden by default.
+
     - Add support for new $CHANGED_SOURCES, $CHANGED_TARGETS,
       $UNCHANGED_SOURCES and $UNCHANGED_TARGETS variables.
 
     - Add general support for batch builds through new batch_key= and
       targets= keywords to Action object creation.
 
+  From Greg Spencer:
+
+    - Support implicit dependency scanning of files encoded in utf-8
+      and utf-16.
+
+  From Matthew Wesley:
+
+    - Copy file attributes so we identify, and can link a shared library
+      from, shared object files in a Repository.
 
 
-RELEASE 1.X - XXX
+
+RELEASE 1.2.0 - Sat, 20 Dec 2008 22:47:29 -0800
+
+  From Steven Knight:
+
+    - Don't fail if can't import a _subprocess module on Windows.
+
+    - Add warnings for use of the deprecated Options object.
+
+
+
+RELEASE 1.1.0.d20081207 - Sun, 07 Dec 2008 19:17:23 -0800
 
   From Benoit Belley:
 
