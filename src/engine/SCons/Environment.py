@@ -1822,9 +1822,7 @@ class Base(SubstitutionEnvironment):
                 CleanTargets[t] = flist
 
     def Configure(self, *args, **kw):
-        nargs = [self]
-        if args:
-            nargs = nargs + self.subst_list(args)[0]
+        nargs = (self,) + args
         nkw = self.subst_kw(kw)
         nkw['_depth'] = kw.get('_depth', 0) + 1
         try:
