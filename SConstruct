@@ -9,7 +9,7 @@
 copyright_years = '2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008'
 
 # This gets inserted into the man pages to reflect the month of release.
-month_year = 'June 2008'
+month_year = 'December 2008'
 
 #
 # __COPYRIGHT__
@@ -45,7 +45,7 @@ import sys
 import tempfile
 
 project = 'scons'
-default_version = '0.98.5'
+default_version = '1.2.0'
 copyright = "Copyright (c) %s The SCons Foundation" % copyright_years
 
 SConsignFile()
@@ -377,7 +377,7 @@ def soelim(target, source, env):
     tfp.close()
 
 def soscan(node, env, path):
-    c = node.get_contents()
+    c = node.get_text_contents()
     return re.compile(r"^[\.']so\s+(\S+)", re.M).findall(c)
 
 soelimbuilder = Builder(action = Action(soelim),

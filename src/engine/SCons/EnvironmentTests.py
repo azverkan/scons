@@ -134,6 +134,10 @@ class CLVar(UserList.UserList):
         if type(seq) == type(''):
             seq = string.split(seq)
         UserList.UserList.__init__(self, seq)
+    def __add__(self, other):
+        return UserList.UserList.__add__(self, CLVar(other))
+    def __radd__(self, other):
+        return UserList.UserList.__radd__(self, CLVar(other))
     def __coerce__(self, other):
         return (self, CLVar(other))
 
@@ -228,6 +232,21 @@ class SubstitutionTestCase(unittest.TestCase):
         env = SubstitutionEnvironment(XXX = 'x')
         assert env.has_key('XXX')
         assert not env.has_key('YYY')
+
+    def test_contains(self):
+        """Test the SubstitutionEnvironment __contains__() method
+        """
+        try:
+            'x' in {'x':1}
+        except TypeError:
+            # TODO(1.5)
+            # An early version of Python that doesn't support "in"
+            # on dictionaries.  Just pass the test.
+            pass
+        else:
+            env = SubstitutionEnvironment(XXX = 'x')
+            assert 'XXX' in env
+            assert not 'YYY' in env
 
     def test_items(self):
         """Test the SubstitutionEnvironment items() method
@@ -616,28 +635,32 @@ sys.exit(0)
 import sys
 sys.exit(1)
 """)
+        test.write('echo.py', """\
+import os, sys
+sys.stdout.write(os.environ['ECHO'] + '\\n')
+sys.exit(0)
+""")
 
         save_stderr = sys.stderr
 
         python = '"' + sys.executable + '"'
 
         try:
+            sys.stderr = StringIO.StringIO()
             cmd = '%s %s' % (python, test.workpath('stdout.py'))
             output = env.backtick(cmd)
-
+            errout = sys.stderr.getvalue()
             assert output == 'this came from stdout.py\n', output
+            assert errout == '', errout
 
             sys.stderr = StringIO.StringIO()
-
             cmd = '%s %s' % (python, test.workpath('stderr.py'))
             output = env.backtick(cmd)
             errout = sys.stderr.getvalue()
-
             assert output == '', output
             assert errout == 'this came from stderr.py\n', errout
 
             sys.stderr = StringIO.StringIO()
-
             cmd = '%s %s' % (python, test.workpath('fail.py'))
             try:
                 env.backtick(cmd)
@@ -645,6 +668,15 @@ sys.exit(1)
                 assert str(e) == "'%s' exited 1" % cmd, str(e)
             else:
                 self.fail("did not catch expected OSError")
+
+            sys.stderr = StringIO.StringIO()
+            cmd = '%s %s' % (python, test.workpath('echo.py'))
+            env['ENV'] = os.environ.copy()
+            env['ENV']['ECHO'] = 'this came from ECHO'
+            output = env.backtick(cmd)
+            errout = sys.stderr.getvalue()
+            assert output == 'this came from ECHO\n', output
+            assert errout == '', errout
 
         finally:
             sys.stderr = save_stderr
@@ -827,6 +859,30 @@ sys.exit(1)
         assert env['A'] == ['aaa'], env['A']
         assert env['B'] == ['bbb'], env['B']
 
+#     def test_MergeShellPaths(self):
+#         """Test the MergeShellPaths() method
+#         """
+#         env = Environment()
+#         env.MergeShellPaths({})
+#         assert not env['ENV'].has_key('INCLUDE'), env['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'})
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'})
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'xyz'})
+#         assert env['ENV']['INCLUDE'] == r'xyz%sc:\Program Files\Stuff'%os.pathsep, env['ENV']['INCLUDE']
+
+#         env = Environment()
+#         env['ENV']['INCLUDE'] = 'xyz'
+#         env.MergeShellPaths({'INCLUDE':['c:/inc1', 'c:/inc2']} )
+#         assert env['ENV']['INCLUDE'] == r'c:/inc1%sc:/inc2%sxyz'%(os.pathsep, os.pathsep), env['ENV']['INCLUDE']
+
+#         # test prepend=0
+#         env = Environment()
+#         env.MergeShellPaths({'INCLUDE': r'c:\Program Files\Stuff'}, prepend=0)
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff', env['ENV']['INCLUDE']
+#         env.MergeShellPaths({'INCLUDE': r'xyz'}, prepend=0)
+#         assert env['ENV']['INCLUDE'] == r'c:\Program Files\Stuff%sxyz'%os.pathsep, env['ENV']['INCLUDE']
 
 
 class BaseTestCase(unittest.TestCase,TestEnvironmentFixture):
@@ -903,7 +959,28 @@ class BaseTestCase(unittest.TestCase,TestEnvironmentFixture):
         assert called_it['target'] == None, called_it
         assert called_it['source'] == None, called_it
 
+    def test_BuilderWrapper_attributes(self):
+        """Test getting and setting of BuilderWrapper attributes
+        """
+        b1 = Builder()
+        b2 = Builder()
+        e1 = Environment()
+        e2 = Environment()
 
+        e1.Replace(BUILDERS = {'b' : b1})
+        bw = e1.b
+
+        assert bw.env is e1
+        bw.env = e2
+        assert bw.env is e2
+
+        assert bw.builder is b1
+        bw.builder = b2
+        assert bw.builder is b2
+
+        self.assertRaises(AttributeError, getattr, bw, 'foobar')
+        bw.foobar = 42
+        assert bw.foobar is 42
 
     # This unit test is currently disabled because we don't think the
     # underlying method it tests (Environment.BuilderWrapper.execute())
@@ -1043,22 +1120,56 @@ env4.builder1.env, env3)
         assert env.Dictionary('ENV')['PATH'] == '/foo:/bar'
 
     def test_ReservedVariables(self):
-        """Test generation of warnings when reserved variable names
-        are set in an environment."""
+        """Test warning generation when reserved variable names are set"""
 
-        SCons.Warnings.enableWarningClass(SCons.Warnings.ReservedVariableWarning)
+        reserved_variables = [
+            'SOURCE',
+            'SOURCES',
+            'TARGET',
+            'TARGETS',
+        ]
+
+        warning = SCons.Warnings.ReservedVariableWarning
+        SCons.Warnings.enableWarningClass(warning)
         old = SCons.Warnings.warningAsException(1)
 
         try:
             env4 = Environment()
-            for kw in ['TARGET', 'TARGETS', 'SOURCE', 'SOURCES']:
+            for kw in reserved_variables:
                 exc_caught = None
                 try:
                     env4[kw] = 'xyzzy'
-                except SCons.Warnings.ReservedVariableWarning:
+                except warning:
                     exc_caught = 1
                 assert exc_caught, "Did not catch ReservedVariableWarning for `%s'" % kw
                 assert not env4.has_key(kw), "`%s' variable was incorrectly set" % kw
+        finally:
+            SCons.Warnings.warningAsException(old)
+
+    def test_FutureReservedVariables(self):
+        """Test warning generation when future reserved variable names are set"""
+
+        future_reserved_variables = [
+            'CHANGED_SOURCES',
+            'CHANGED_TARGETS',
+            'UNCHANGED_SOURCES',
+            'UNCHANGED_TARGETS',
+        ]
+
+        warning = SCons.Warnings.FutureReservedVariableWarning
+        SCons.Warnings.enableWarningClass(warning)
+        old = SCons.Warnings.warningAsException(1)
+
+        try:
+            env4 = Environment()
+            for kw in future_reserved_variables:
+                exc_caught = None
+                try:
+                    env4[kw] = 'xyzzy'
+                except warning:
+                    exc_caught = 1
+                assert exc_caught, "Did not catch FutureReservedVariableWarning for `%s'" % kw
+                assert env4.has_key(kw), "`%s' variable was not set" % kw
         finally:
             SCons.Warnings.warningAsException(old)
 
@@ -1497,6 +1608,8 @@ def exists(env):
         env1.AppendENVPath('PATH',r'C:\dir\num\three', sep = ';')
         env1.AppendENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';')
         env1.AppendENVPath('MYPATH',r'C:\mydir\num\one','MYENV', sep = ';')
+        # this should do nothing since delete_existing is 0
+        env1.AppendENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';', delete_existing=0)
         assert(env1['ENV']['PATH'] == r'C:\dir\num\one;C:\dir\num\two;C:\dir\num\three')
         assert(env1['MYENV']['MYPATH'] == r'C:\mydir\num\two;C:\mydir\num\three;C:\mydir\num\one')
 
@@ -1516,19 +1629,21 @@ def exists(env):
                           BBB4 = ['b4'],
                           BBB5 = ['b5'],
                           CCC1 = '',
-                          CCC2 = '')
+                          CCC2 = '',
+                          DDD1 = ['a', 'b', 'c'])
         env.AppendUnique(AAA1 = 'a1',
                          AAA2 = ['a2'],
-                         AAA3 = ['a3', 'b', 'c', 'a3'],
+                         AAA3 = ['a3', 'b', 'c', 'c', 'b', 'a3'], # ignore dups
                          AAA4 = 'a4.new',
                          AAA5 = ['a5.new'],
                          BBB1 = 'b1',
                          BBB2 = ['b2'],
-                         BBB3 = ['b3', 'c', 'd', 'b3'],
+                         BBB3 = ['b3', 'c', 'd', 'c', 'b3'],
                          BBB4 = 'b4.new',
                          BBB5 = ['b5.new'],
                          CCC1 = 'c1',
-                         CCC2 = ['c2'])
+                         CCC2 = ['c2'],
+                         DDD1 = 'b')
 
         assert env['AAA1'] == 'a1a1', env['AAA1']
         assert env['AAA2'] == ['a2'], env['AAA2']
@@ -1542,7 +1657,15 @@ def exists(env):
         assert env['BBB5'] == ['b5', 'b5.new'], env['BBB5']
         assert env['CCC1'] == 'c1', env['CCC1']
         assert env['CCC2'] == ['c2'], env['CCC2']
+        assert env['DDD1'] == ['a', 'b', 'c'], env['DDD1']
 
+        env.AppendUnique(DDD1 = 'b', delete_existing=1)
+        assert env['DDD1'] == ['a', 'c', 'b'], env['DDD1'] # b moves to end
+        env.AppendUnique(DDD1 = ['a','b'], delete_existing=1)
+        assert env['DDD1'] == ['c', 'a', 'b'], env['DDD1'] # a & b move to end
+        env.AppendUnique(DDD1 = ['e','f', 'e'], delete_existing=1)
+        assert env['DDD1'] == ['c', 'a', 'b', 'f', 'e'], env['DDD1'] # add last
+        
         env['CLVar'] = CLVar([])
         env.AppendUnique(CLVar = 'bar')
         result = env['CLVar']
@@ -2131,6 +2254,8 @@ f5: \
         env1.PrependENVPath('PATH',r'C:\dir\num\three',sep = ';')
         env1.PrependENVPath('MYPATH',r'C:\mydir\num\three','MYENV',sep = ';')
         env1.PrependENVPath('MYPATH',r'C:\mydir\num\one','MYENV',sep = ';')
+        # this should do nothing since delete_existing is 0
+        env1.PrependENVPath('MYPATH',r'C:\mydir\num\three','MYENV', sep = ';', delete_existing=0)
         assert(env1['ENV']['PATH'] == r'C:\dir\num\three;C:\dir\num\two;C:\dir\num\one')
         assert(env1['MYENV']['MYPATH'] == r'C:\mydir\num\one;C:\mydir\num\three;C:\mydir\num\two')
 
@@ -2162,10 +2287,11 @@ f5: \
                           BBB4 = ['b4'],
                           BBB5 = ['b5'],
                           CCC1 = '',
-                          CCC2 = '')
+                          CCC2 = '',
+                          DDD1 = ['a', 'b', 'c'])
         env.PrependUnique(AAA1 = 'a1',
                           AAA2 = ['a2'],
-                          AAA3 = ['a3', 'b', 'c', 'a3'],
+                          AAA3 = ['a3', 'b', 'c', 'b', 'a3'], # ignore dups
                           AAA4 = 'a4.new',
                           AAA5 = ['a5.new'],
                           BBB1 = 'b1',
@@ -2174,10 +2300,11 @@ f5: \
                           BBB4 = 'b4.new',
                           BBB5 = ['b5.new'],
                           CCC1 = 'c1',
-                          CCC2 = ['c2'])
+                          CCC2 = ['c2'],
+                          DDD1 = 'b')
         assert env['AAA1'] == 'a1a1', env['AAA1']
         assert env['AAA2'] == ['a2'], env['AAA2']
-        assert env['AAA3'] == ['b', 'c', 'a3'], env['AAA3']
+        assert env['AAA3'] == ['c', 'b', 'a3'], env['AAA3']
         assert env['AAA4'] == 'a4.newa4', env['AAA4']
         assert env['AAA5'] == ['a5.new', 'a5'], env['AAA5']
         assert env['BBB1'] == ['b1'], env['BBB1']
@@ -2187,6 +2314,15 @@ f5: \
         assert env['BBB5'] == ['b5.new', 'b5'], env['BBB5']
         assert env['CCC1'] == 'c1', env['CCC1']
         assert env['CCC2'] == ['c2'], env['CCC2']
+        assert env['DDD1'] == ['a', 'b', 'c'], env['DDD1']
+
+        env.PrependUnique(DDD1 = 'b', delete_existing=1)
+        assert env['DDD1'] == ['b', 'a', 'c'], env['DDD1'] # b moves to front
+        env.PrependUnique(DDD1 = ['a','c'], delete_existing=1)
+        assert env['DDD1'] == ['a', 'c', 'b'], env['DDD1'] # a & c move to front
+        env.PrependUnique(DDD1 = ['d','e','d'], delete_existing=1)
+        assert env['DDD1'] == ['d', 'e', 'a', 'c', 'b'], env['DDD1'] 
+
 
         env['CLVar'] = CLVar([])
         env.PrependUnique(CLVar = 'bar')
@@ -2988,6 +3124,7 @@ def generate(env):
         env = self.TestEnvironment(FOO = 'SConsign',
                           BAR = os.path.join(os.sep, 'File'))
         env.fs = MyFS()
+        env.Execute = lambda action: None
 
         try:
             fnames = []
@@ -3000,32 +3137,36 @@ def generate(env):
             SCons.SConsign.File = capture
 
             env.SConsignFile('foo')
-            assert fnames[0] == os.path.join(os.sep, 'dir', 'foo'), fnames
-            assert dbms[0] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', 'foo'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('$FOO')
-            assert fnames[1] == os.path.join(os.sep, 'dir', 'SConsign'), fnames
-            assert dbms[1] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', 'SConsign'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('/$FOO')
-            assert fnames[2] == '/SConsign', fnames
-            assert dbms[2] == None, dbms
+            assert fnames[-1] == os.sep + 'SConsign', fnames
+            assert dbms[-1] == None, dbms
+
+            env.SConsignFile(os.sep + '$FOO')
+            assert fnames[-1] == os.sep + 'SConsign', fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile('$BAR', 'x')
-            assert fnames[3] == os.path.join(os.sep, 'File'), fnames
-            assert dbms[3] == 'x', dbms
+            assert fnames[-1] == os.path.join(os.sep, 'File'), fnames
+            assert dbms[-1] == 'x', dbms
 
             env.SConsignFile('__$BAR', 7)
-            assert fnames[4] == os.path.join(os.sep, 'dir', '__', 'File'), fnames
-            assert dbms[4] == 7, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', '__', 'File'), fnames
+            assert dbms[-1] == 7, dbms
 
             env.SConsignFile()
-            assert fnames[5] == os.path.join(os.sep, 'dir', '.sconsign'), fnames
-            assert dbms[5] == None, dbms
+            assert fnames[-1] == os.path.join(os.sep, 'dir', '.sconsign'), fnames
+            assert dbms[-1] == None, dbms
 
             env.SConsignFile(None)
-            assert fnames[6] == None, fnames
-            assert dbms[6] == None, dbms
+            assert fnames[-1] == None, fnames
+            assert dbms[-1] == None, dbms
         finally:
             SCons.SConsign.File = save_SConsign_File
 
@@ -3418,6 +3559,27 @@ class OverrideEnvironmentTestCase(unittest.TestCase,TestEnvironmentFixture):
         assert not env.has_key('ZZZ'), env.has_key('ZZZ')
         assert not env2.has_key('ZZZ'), env2.has_key('ZZZ')
         assert env3.has_key('ZZZ'), env3.has_key('ZZZ')
+
+    def test_contains(self):
+        """Test the OverrideEnvironment __contains__() method"""
+        try:
+            'x' in {'x':1}
+        except TypeError:
+            # TODO(1.5)
+            # An early version of Python that doesn't support "in"
+            # on dictionaries.  Just pass the test.
+            pass
+        else:
+            env, env2, env3 = self.envs
+            assert 'XXX' in env
+            assert 'XXX' in env2
+            assert 'XXX' in env3
+            assert 'YYY' in env
+            assert 'YYY' in env2
+            assert 'YYY' in env3
+            assert not 'ZZZ' in env
+            assert not 'ZZZ' in env2
+            assert 'ZZZ' in env3
 
     def test_items(self):
         """Test the OverrideEnvironment Dictionary() method"""

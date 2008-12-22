@@ -56,7 +56,6 @@
     <!ENTITY command-line SYSTEM "command-line.xml">
     <!ENTITY copyright SYSTEM "copyright.xml">
     <!ENTITY depends SYSTEM "depends.xml">
-    <!ENTITY ENV_file SYSTEM "ENV.xml">
     <!ENTITY environments SYSTEM "environments.xml">
     <!ENTITY errors SYSTEM "errors.xml">
     <!ENTITY example SYSTEM "example.xml">
@@ -68,9 +67,12 @@
     <!ENTITY less-simple SYSTEM "less-simple.xml">
     <!ENTITY libraries SYSTEM "libraries.xml">
     <!ENTITY make SYSTEM "make.xml">
+    <!ENTITY mergeflags SYSTEM "mergeflags.xml">
+    <!ENTITY misc SYSTEM "misc.xml">
     <!ENTITY nodes SYSTEM "nodes.xml">
     <!ENTITY output SYSTEM "output.xml">
     <!ENTITY parseconfig SYSTEM "parseconfig.xml">
+    <!ENTITY parseflags SYSTEM "parseflags.xml">
     <!ENTITY preface SYSTEM "preface.xml">
     <!ENTITY python SYSTEM "python.xml">
     <!ENTITY repositories SYSTEM "repositories.xml">
@@ -94,24 +96,14 @@
 
   <!--
 
-  XXX AllowSubstExceptions()
-  XXX EnsurePythonVersion()
-  XXX EnsureSConsVersion()
-  XXX Exit()
   XXX FindFile()
   XXX FindPathDirs()
-  XXX Flatten()
   XXX GetBuildPath()
   XXX GetLaunchDir()
-
-  XXX ParseConfig()
-  XXX MergeFlags()
-  XXX ParseFlags()
 
   XXX ParseDepends()
   XXX Platform()
   XXX SConsignFile()
-  XXX SideEffect()
   XXX Tools()
 
   XXX GetOption('duplicate')
@@ -120,13 +112,9 @@
 
   XXX CheckTypeSize()
 
-  XXX Progress()
-
   XXX - - diskcheck=
 
   XXX - - warn=
-
-  XXX ARGLIST
 
   -->
 
@@ -141,10 +129,10 @@
 
     <edition>Revision &buildrevision; (&builddate;)</edition>
 
-    <pubdate>2004, 2005, 2006, 2007</pubdate>
+    <pubdate>2004, 2005, 2006, 2007, 2008</pubdate>
 
     <copyright>
-      <year>2004, 2005, 2006, 2007</year>
+      <year>2004, 2005, 2006, 2007, 2008</year>
       <holder>Steven Knight</holder>
     </copyright>
 
@@ -192,22 +180,22 @@
   </chapter>
 
   <chapter id="chap-environments">
-    <title>Construction Environments</title>
+    <title>Environments</title>
     &environments;
   </chapter>
 
-  <!--
-
+  <!-- These next three sections should be combined into one chapter -->
+  <chapter id="chap-mergeflags">
+    <title>Merging Options into the Environment: the &MergeFlags; Function</title>
+    &mergeflags;
+  </chapter>
+  <chapter id="chap-parseflags">
+    <title>Separating Compile Arguments into their Variables:  the &ParseFlags; Function</title>
+    &parseflags;
+  </chapter>
   <chapter id="chap-parseconfig">
     <title>Finding Installed Library Information:  the &ParseConfig; Function</title>
     &parseconfig;
-  </chapter>
-
-  -->
-
-  <chapter id="chap-ENV">
-    <title>Controlling the External Environment Used to Execute Build Commands</title>
-    &ENV_file;
   </chapter>
 
   <chapter id="chap-output">
@@ -334,6 +322,11 @@
   </chapter>
 
   -->
+
+  <chapter id="chap-misc">
+    <title>Miscellaneous Functionality</title>
+    &misc;
+  </chapter>
 
   <chapter id="chap-troubleshooting">
     <title>Troubleshooting</title>

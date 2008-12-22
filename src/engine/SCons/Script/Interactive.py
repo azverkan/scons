@@ -98,8 +98,6 @@ try:
 except ImportError:
     pass
 
-from SCons.Debug import Trace
-
 class SConsInteractiveCmd(cmd.Cmd):
     """\
     build [TARGETS]         Build the specified TARGETS and their dependencies.
@@ -163,6 +161,7 @@ class SConsInteractiveCmd(cmd.Cmd):
         build [TARGETS]         Build the specified TARGETS and their
                                 dependencies.  'b' is a synonym.
         """
+        import SCons.Node
         import SCons.SConsign
         import SCons.Script.Main
 
@@ -259,6 +258,12 @@ class SConsInteractiveCmd(cmd.Cmd):
             # node.set_state() to reset it manually
             node.set_state(SCons.Node.no_state)
             node.implicit = None
+
+            # Debug:  Uncomment to verify that all Taskmaster reference
+            # counts have been reset to zero.
+            #if node.ref_count != 0:
+            #    from SCons.Debug import Trace
+            #    Trace('node %s, ref_count %s !!!\n' % (node, node.ref_count))
 
         SCons.SConsign.Reset()
         SCons.Script.Main.progress_display("scons: done clearing node information.")
