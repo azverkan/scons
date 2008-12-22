@@ -35,8 +35,9 @@ that can be used by scripts or modules looking for the canonical default.
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-import fnmatch
 from itertools import izip
+import cStringIO
+import fnmatch
 import os
 import os.path
 import re
@@ -45,7 +46,24 @@ import stat
 import string
 import sys
 import time
-import cStringIO
+
+try:
+    import codecs
+except ImportError:
+    pass
+else:
+    # TODO(2.2):  Remove when 2.3 becomes the minimal supported version.
+    try:
+        codecs.BOM_UTF8
+    except AttributeError:
+        codecs.BOM_UTF8 = '\xef\xbb\xbf'
+    try:
+        codecs.BOM_UTF16
+    except AttributeError:
+        if sys.byteorder == 'little':
+            codecs.BOM_UTF16 = '\xff\xfe'
+        else:
+            codecs.BOM_UTF16 = '\xfe\xff'
 
 import SCons.Action
 from SCons.Debug import logInstanceCreation
@@ -60,6 +78,23 @@ import SCons.Warnings
 from SCons.Debug import Trace
 
 do_store_info = True
+
+
+class EntryProxyAttributeError(AttributeError):
+    """
+    An AttributeError subclass for recording and displaying the name
+    of the underlying Entry involved in an AttributeError exception.
+    """
+    def __init__(self, entry_proxy, attribute):
+        AttributeError.__init__(self)
+        self.entry_proxy = entry_proxy
+        self.attribute = attribute
+    def __str__(self):
+        entry = self.entry_proxy.get()
+        fmt = "%s instance %s has no attribute %s"
+        return fmt % (entry.__class__.__name__,
+                      repr(entry.name),
+                      repr(self.attribute))
 
 # The max_drift value:  by default, use a cached signature value for
 # any file that's been untouched for more than two days.
@@ -483,16 +518,11 @@ class EntryProxy(SCons.Util.Proxy):
         except KeyError:
             try:
                 attr = SCons.Util.Proxy.__getattr__(self, name)
-            except AttributeError:
-                entry = self.get()
-                classname = string.split(str(entry.__class__), '.')[-1]
-                if classname[-2:] == "'>":
-                    # new-style classes report their name as:
-                    #   "<class 'something'>"
-                    # instead of the classic classes:
-                    #   "something"
-                    classname = classname[:-2]
-                raise AttributeError, "%s instance '%s' has no attribute '%s'" % (classname, entry.name, name)
+            except AttributeError, e:
+                # Raise our own AttributeError subclass with an
+                # overridden __str__() method that identifies the
+                # name of the entry that caused the exception.
+                raise EntryProxyAttributeError(self, name)
             return attr
         else:
             return attr_function(self)
@@ -864,11 +894,8 @@ class Entry(Base):
         return self.get_suffix()
 
     def get_contents(self):
-        """Fetch the contents of the entry.
-
-        Since this should return the real contents from the file
-        system, we check to see into what sort of subclass we should
-        morph this Entry."""
+        """Fetch the contents of the entry.  Returns the exact binary
+        contents of the file."""
         try:
             self = self.disambiguate(must_exist=1)
         except SCons.Errors.UserError:
@@ -880,6 +907,24 @@ class Entry(Base):
             return ''
         else:
             return self.get_contents()
+
+    def get_text_contents(self):
+        """Fetch the decoded text contents of a Unicode encoded Entry.
+
+        Since this should return the text contents from the file
+        system, we check to see into what sort of subclass we should
+        morph this Entry."""
+        try:
+            self = self.disambiguate(must_exist=1)
+        except SCons.Errors.UserError:
+            # There was nothing on disk with which to disambiguate
+            # this entry.  Leave it as an Entry, but return a null
+            # string so calls to get_text_contents() in emitters and
+            # the like (e.g. in qt.py) don't have to disambiguate by
+            # hand or catch the exception.
+            return ''
+        else:
+            return self.get_text_contents()
 
     def must_be_same(self, klass):
         """Called to make sure a Node is a Dir.  Since we're an
@@ -1586,13 +1631,18 @@ class Dir(Base):
         """A directory does not get scanned."""
         return None
 
+    def get_text_contents(self):
+        """We already emit things in text, so just return the binary
+        version."""
+        return self.get_contents()
+
     def get_contents(self):
         """Return content signatures and names of all our children
         separated by new-lines. Ensure that the nodes are sorted."""
         contents = []
         name_cmp = lambda a, b: cmp(a.name, b.name)
         sorted_children = self.children()[:]
-        sorted_children.sort(name_cmp)        
+        sorted_children.sort(name_cmp)
         for node in sorted_children:
             contents.append('%s %s\n' % (node.get_csig(), node.name))
         return string.join(contents, '')
@@ -1880,6 +1930,7 @@ class Dir(Base):
         for srcdir in self.srcdir_list():
             search_dir_list.extend(srcdir.get_all_rdirs())
 
+        selfEntry = self.Entry
         names = []
         for dir in search_dir_list:
             # We use the .name attribute from the Node because the keys of
@@ -1889,6 +1940,10 @@ class Dir(Base):
             entry_names = filter(lambda n: n not in ('.', '..'), dir.entries.keys())
             node_names = map(lambda n, e=dir.entries: e[n].name, entry_names)
             names.extend(node_names)
+            if not strings:
+                # Make sure the working directory (self) actually has
+                # entries for all Nodes in repositories or variant dirs.
+                map(selfEntry, node_names)
             if ondisk:
                 try:
                     disk_names = os.listdir(dir.abspath)
@@ -1909,7 +1964,6 @@ class Dir(Base):
                         disk_names = filter(lambda x: x[0] != '.', disk_names)
                     disk_names = fnmatch.filter(disk_names, pattern)
                     dirEntry = dir.Entry
-                    selfEntry = self.Entry
                     for name in disk_names:
                         # Add './' before disk filename so that '#' at
                         # beginning of filename isn't interpreted.
@@ -2220,12 +2274,28 @@ class File(Base):
             return ''
         fname = self.rfile().abspath
         try:
-            r = open(fname, "rb").read()
+            contents = open(fname, "rb").read()
         except EnvironmentError, e:
             if not e.filename:
                 e.filename = fname
             raise
-        return r
+        return contents
+
+    try:
+        import codecs
+    except ImportError:
+        get_text_contents = get_contents
+    else:
+        # This attempts to figure out what the encoding of the text is
+        # based upon the BOM bytes, and then decodes the contents so that
+        # it's a valid python string.
+        def get_text_contents(self):
+            contents = self.get_contents()
+            if contents.startswith(codecs.BOM_UTF8):
+                contents = contents.decode('utf-8')
+            elif contents.startswith(codecs.BOM_UTF16):
+                contents = contents.decode('utf-16')
+            return contents
 
     def get_content_hash(self):
         """
@@ -2818,6 +2888,19 @@ class File(Base):
                    (isinstance(node, File) or isinstance(node, Entry) \
                     or not node.is_derived()):
                         result = node
+                        # Copy over our local attributes to the repository
+                        # Node so we identify shared object files in the
+                        # repository and don't assume they're static.
+                        #
+                        # This isn't perfect; the attribute would ideally
+                        # be attached to the object in the repository in
+                        # case it was built statically in the repository
+                        # and we changed it to shared locally, but that's
+                        # rarely the case and would only occur if you
+                        # intentionally used the same suffix for both
+                        # shared and static objects anyway.  So this
+                        # should work well in practice.
+                        result.attributes = self.attributes
                         break
         self._memo['rfile'] = result
         return result
