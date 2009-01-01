@@ -29,6 +29,10 @@ RELEASE 1.X - XXX
     - Add general support for batch builds through new batch_key= and
       targets= keywords to Action object creation.
 
+  From Arve Knudsen:
+
+    - Document TestCommon.shobj_prefix variable.
+
   From Greg Spencer:
 
     - Support implicit dependency scanning of files encoded in utf-8
