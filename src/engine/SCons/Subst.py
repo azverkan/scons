@@ -253,6 +253,15 @@ class Target_or_Source:
             return repr(nl[0])
         return ''
 
+class NullNodeList(SCons.Util.NullSeq):
+  def __call__(self, *args, **kwargs): return ''
+  def __str__(self): return ''
+  # TODO(1.5):  unneeded after new-style classes introduce iterators
+  def __getitem__(self, i):
+      raise IndexError
+
+NullNodesList = NullNodeList()
+
 def subst_dict(target, source):
     """Create a dictionary for substitution of special
     construction variables.
@@ -287,8 +296,8 @@ def subst_dict(target, source):
         dict['CHANGED_TARGETS'] = '$TARGETS'
         dict['UNCHANGED_TARGETS'] = '$TARGETS'
     else:
-        dict['TARGETS'] = None
-        dict['TARGET'] = None
+        dict['TARGETS'] = NullNodesList
+        dict['TARGET'] = NullNodesList
 
     if source:
         def get_src_subst_proxy(node):
@@ -313,8 +322,8 @@ def subst_dict(target, source):
         dict['CHANGED_SOURCES'] = '$SOURCES'
         dict['UNCHANGED_SOURCES'] = '$SOURCES'
     else:
-        dict['SOURCES'] = None
-        dict['SOURCE'] = None
+        dict['SOURCES'] = NullNodesList
+        dict['SOURCE'] = NullNodesList
 
     return dict
 

@@ -132,7 +132,7 @@ class Executor:
         self.env = env
         self.overridelist = overridelist
         if targets or sources:
-            self.batches = [Batch(targets[:], sources[:])]
+            self.batches = [Batch(targets[:], SCons.Util.UniqueList(sources[:]))]
         else:
             self.batches = []
         self.sources_need_sorting = False
@@ -238,14 +238,16 @@ class Executor:
         """Returns all targets for all batches of this Executor."""
         result = []
         for batch in self.batches:
-            result.extend(batch.targets)
+            # TODO(1.5):  remove the list() cast
+            result.extend(list(batch.targets))
         return result
 
     def get_all_sources(self):
         """Returns all sources for all batches of this Executor."""
         result = []
         for batch in self.batches:
-            result.extend(batch.sources)
+            # TODO(1.5):  remove the list() cast
+            result.extend(list(batch.sources))
         return result
 
     def get_all_children(self):
@@ -274,7 +276,8 @@ class Executor:
         """
         result = []
         for target in self.get_all_targets():
-            result.extend(target.prerequisites)
+            # TODO(1.5):  remove the list() cast
+            result.extend(list(target.prerequisites))
         return result
 
     def get_action_side_effects(self):
@@ -371,7 +374,6 @@ class Executor:
         """Add source files to this Executor's list.  This is necessary
         for "multi" Builders that can be called repeatedly to build up
         a source file list for a given target."""
-        self.sources_need_sorting = True
         # TODO(batch):  extend to multiple batches
         assert (len(self.batches) == 1)
         # TODO(batch):  remove duplicates?
@@ -379,9 +381,6 @@ class Executor:
         self.batches[0].sources.extend(sources)
 
     def get_sources(self):
-        if self.sources_need_sorting:
-            self.batches[0].sources = SCons.Util.uniquer_hashables(self.get_all_sources())
-            self.sources_need_sorting = False
         return self.batches[0].sources
 
     def add_batch(self, targets, sources):

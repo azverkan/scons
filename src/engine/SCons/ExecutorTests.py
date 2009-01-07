@@ -162,12 +162,12 @@ class ExecutorTestCase(unittest.TestCase):
 
         env = MyEnvironment(Y='yyy')
         overrides = [{'O':'ob3'}, {'O':'oo3'}]
-        x = SCons.Executor.Executor(MyAction(), env, overrides, 't', 's')
+        x = SCons.Executor.Executor(MyAction(), env, overrides, ['t'], ['s'])
         be = x.get_build_env()
         assert be['O'] == 'oo3', be['O']
         assert be['Y'] == 'yyy', be['Y']
         overrides = [{'O':'ob3'}]
-        x = SCons.Executor.Executor(MyAction(), env, overrides, 't', 's')
+        x = SCons.Executor.Executor(MyAction(), env, overrides, ['t'], ['s'])
         be = x.get_build_env()
         assert be['O'] == 'ob3', be['O']
         assert be['Y'] == 'yyy', be['Y']
@@ -275,11 +275,11 @@ class ExecutorTestCase(unittest.TestCase):
 
         x.add_sources(['s1', 's2'])
         sources = x.get_all_sources()
-        assert sources == ['s1', 's2', 's1', 's2'], sources
+        assert sources == ['s1', 's2'], sources
 
         x.add_sources(['s3', 's1', 's4'])
         sources = x.get_all_sources()
-        assert sources == ['s1', 's2', 's1', 's2', 's3', 's1', 's4'], sources
+        assert sources == ['s1', 's2', 's3', 's4'], sources
 
     def test_get_sources(self):
         """Test getting sources from an Executor"""
