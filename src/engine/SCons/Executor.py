@@ -261,20 +261,16 @@ class Executor:
         over and over), so removing the duplicates once up front should
         save the Taskmaster a lot of work.
         """
-        result = []
+        result = SCons.Util.UniqueList([])
         for target in self.get_all_targets():
             result.extend(target.children())
-        return SCons.Util.uniquer_hashables(result)
+        return result
 
     def get_all_prerequisites(self):
         """Returns all unique (order-only) prerequisites for all batches
         of this Executor.
-
-        We don't bother making this list unique since we expect
-        prerequisites be rarely used, so there will likely be little
-        benefit from removing duplicates here.
         """
-        result = []
+        result = SCons.Util.UniqueList([])
         for target in self.get_all_targets():
             # TODO(1.5):  remove the list() cast
             result.extend(list(target.prerequisites))
@@ -285,10 +281,10 @@ class Executor:
         """Returns all side effects for all batches of this
         Executor used by the underlying Action.
         """
-        result = []
+        result = SCons.Util.UniqueList([])
         for target in self.get_action_targets():
             result.extend(target.side_effects)
-        return SCons.Util.uniquer_hashables(result)
+        return result
 
     memoizer_counters.append(SCons.Memoize.CountValue('get_build_env'))
 
