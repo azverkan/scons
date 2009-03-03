@@ -25,60 +25,35 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify that setting $PDB to '${TARGET}.pdb allows us to build multiple
-programs with separate .pdb files from the same environment.
-
-Under the covers, this verifies that emitters support expansion of the
-$TARGET variable (and implicitly $SOURCE), using the original specified
-list(s).
+Verify correct deletion of broken symlinks.
 """
 
-import sys
+import os
 
 import TestSCons
 
-_exe = TestSCons._exe
-
 test = TestSCons.TestSCons()
 
-if sys.platform != 'win32':
-    msg = "Skipping Visual C/C++ test on non-Windows platform '%s'\n" % sys.platform
-    test.skip_test(msg)
+if not hasattr(os, 'symlink'):
+    test.skip_test('No os.symlink() function; skipping test\n')
 
 test.write('SConstruct', """\
-env = Environment(PDB = '${TARGET.base}.pdb')
-env.Program('test1.cpp')
-env.Program('test2.cpp')
+Execute(Mkdir("testdir"))
+dir = Dir("testdir")
+Clean(dir, 'testdir')
 """)
 
-test.write('test1.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test1.cpp\\n");
-    exit (0);
-}
-""")
+test.run(arguments = '-Q -q', stdout='Mkdir("testdir")\n')
 
-test.write('test2.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test2.cpp\\n");
-    exit (0);
-}
-""")
+os.symlink('testdir/symlinksrc', 'testdir/symlinkdst')
 
-test.run(arguments = '.')
+expect = """\
+Mkdir("testdir")
+Removed %s
+Removed directory testdir
+""" % os.path.join('testdir', 'symlinkdst')
 
-test.must_exist('test1%s' % _exe)
-test.must_exist('test1.pdb')
-test.must_exist('test2%s' % _exe)
-test.must_exist('test2.pdb')
+test.run(arguments = '-c -Q -q', stdout=expect)
 
 test.pass_test()
 

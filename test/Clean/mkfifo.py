@@ -25,60 +25,38 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify that setting $PDB to '${TARGET}.pdb allows us to build multiple
-programs with separate .pdb files from the same environment.
-
-Under the covers, this verifies that emitters support expansion of the
-$TARGET variable (and implicitly $SOURCE), using the original specified
-list(s).
+Verify that SCons reports an error when cleaning up a target directory
+containing a named pipe created with o.mkfifo().
 """
 
-import sys
+import os
 
 import TestSCons
 
-_exe = TestSCons._exe
-
 test = TestSCons.TestSCons()
 
-if sys.platform != 'win32':
-    msg = "Skipping Visual C/C++ test on non-Windows platform '%s'\n" % sys.platform
-    test.skip_test(msg)
+if not hasattr(os, 'mkfifo'):
+    test.skip_test('No os.mkfifo() function; skipping test\n')
 
 test.write('SConstruct', """\
-env = Environment(PDB = '${TARGET.base}.pdb')
-env.Program('test1.cpp')
-env.Program('test2.cpp')
+Execute(Mkdir("testdir"))
+dir = Dir("testdir")
+Clean(dir, 'testdir')
 """)
 
-test.write('test1.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test1.cpp\\n");
-    exit (0);
-}
-""")
+test.run(arguments='-Q -q', stdout='Mkdir("testdir")\n')
 
-test.write('test2.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test2.cpp\\n");
-    exit (0);
-}
-""")
+os.mkfifo('testdir/namedpipe')
 
-test.run(arguments = '.')
+expect = """\
+Mkdir("testdir")
+Path '%s' exists but isn't a file or directory.
+scons: Could not remove 'testdir': Directory not empty
+""" % os.path.join('testdir', 'namedpipe')
 
-test.must_exist('test1%s' % _exe)
-test.must_exist('test1.pdb')
-test.must_exist('test2%s' % _exe)
-test.must_exist('test2.pdb')
+test.run(arguments='-c -Q -q', stdout=expect)
+ 
+test.must_exist(test.workpath('testdir/namedpipe'))
 
 test.pass_test()
 

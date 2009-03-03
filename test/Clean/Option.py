@@ -25,60 +25,57 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Verify that setting $PDB to '${TARGET}.pdb allows us to build multiple
-programs with separate .pdb files from the same environment.
-
-Under the covers, this verifies that emitters support expansion of the
-$TARGET variable (and implicitly $SOURCE), using the original specified
-list(s).
+Verify that {Set,Get}Option('clean') works correctly to control
+cleaning behavior.
 """
 
-import sys
+import os
 
 import TestSCons
 
-_exe = TestSCons._exe
+_python_ = TestSCons._python_
 
 test = TestSCons.TestSCons()
 
-if sys.platform != 'win32':
-    msg = "Skipping Visual C/C++ test on non-Windows platform '%s'\n" % sys.platform
-    test.skip_test(msg)
-
-test.write('SConstruct', """\
-env = Environment(PDB = '${TARGET.base}.pdb')
-env.Program('test1.cpp')
-env.Program('test2.cpp')
+test.write('build.py', r"""
+import sys
+contents = open(sys.argv[2], 'rb').read()
+file = open(sys.argv[1], 'wb')
+file.write(contents)
+file.close()
 """)
 
-test.write('test1.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test1.cpp\\n");
-    exit (0);
-}
-""")
+test.write('SConstruct', """
+B = Builder(action = r'%(_python_)s build.py $TARGETS $SOURCES')
+env = Environment(BUILDERS = { 'B' : B })
+env.B(target = 'foo.out', source = 'foo.in')
 
-test.write('test2.cpp', """\
-#include <stdio.h>
-#include <stdlib.h>
-int
-main(int argc, char *argv)
-{
-    printf("test2.cpp\\n");
-    exit (0);
-}
-""")
+mode = ARGUMENTS.get('MODE')
+if mode == 'not':
+    assert not GetOption('clean')
+if mode == 'set-zero':
+    assert GetOption('clean')
+    SetOption('clean', 0)
+    assert GetOption('clean')
+if mode == 'set-one':
+    assert not GetOption('clean')
+    SetOption('clean', 1)
+    assert GetOption('clean')
+""" % locals())
 
-test.run(arguments = '.')
+test.write('foo.in', '"Foo", I say!\n')
 
-test.must_exist('test1%s' % _exe)
-test.must_exist('test1.pdb')
-test.must_exist('test2%s' % _exe)
-test.must_exist('test2.pdb')
+test.run(arguments='foo.out MODE=not')
+test.must_match(test.workpath('foo.out'), '"Foo", I say!\n')
+
+test.run(arguments='-c foo.out MODE=set-zero')
+test.must_not_exist(test.workpath('foo.out'))
+
+test.run(arguments='foo.out MODE=none')
+test.must_match(test.workpath('foo.out'), '"Foo", I say!\n')
+
+test.run(arguments='foo.out MODE=set-one')
+test.must_not_exist(test.workpath('foo.out'))
 
 test.pass_test()
 
