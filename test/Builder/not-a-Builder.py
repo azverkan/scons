@@ -25,44 +25,32 @@
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Test the ability to use a direct Python function to wrap
-calls to other Builder(s).
+Test the error when trying to configure a Builder with a non-Builder object.
 """
 
 import TestSCons
 
 test = TestSCons.TestSCons()
 
-test.write('SConstruct', """
-import os.path
-def cat(target, source, env):
-    fp = open(str(target[0]), 'wb')
-    for s in map(str, source):
-        fp.write(open(s, 'rb').read())
-Cat = Builder(action=cat)
-def Wrapper(env, target, source):
-    if not target:
-        target = [str(source[0]).replace('.in', '.wout')]
-    t1 = 't1-'+str(target[0])
-    source = 's-'+str(source[0])
-    env.Cat(t1, source)
-    t2 = 't2-'+str(target[0])
-    env.Cat(t2, source)
-env = Environment(BUILDERS = {'Cat' : Cat,
-                              'Wrapper' : Wrapper})
-env.Wrapper('f1.out', 'f1.in')
-env.Wrapper('f2.in')
+SConstruct_path = test.workpath('SConstruct')
+
+test.write(SConstruct_path, """\
+def mkdir(env, target, source):
+    return None
+mkdir = 1
+env = Environment(BUILDERS={'mkdir': 1})
+env.mkdir(env.Dir('src'), None)
 """)
 
-test.write('s-f1.in', "s-f1.in\n")
-test.write('s-f2.in', "s-f2.in\n")
+expect_stderr = """\
 
-test.run()
+scons: *** 1 is not a Builder.
+""" + test.python_file_line(SConstruct_path, 4)
 
-test.must_match('t1-f1.out', "s-f1.in\n")
-test.must_match('t1-f2.wout', "s-f2.in\n")
-test.must_match('t2-f1.out', "s-f1.in\n")
-test.must_match('t2-f2.wout', "s-f2.in\n")
+test.run(arguments='.',
+         stderr=expect_stderr,
+         status=2)
+
 
 test.pass_test()
 

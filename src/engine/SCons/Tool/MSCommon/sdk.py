@@ -76,12 +76,15 @@ class SDKDefinition:
             return None
 
         hkey = self.HKEY_FMT % self.hkey_data
+        debug('find_sdk_dir(): checking registry:%s'%hkey)
 
         try:
             sdk_dir = common.read_reg(hkey)
         except WindowsError, e:
             debug('find_sdk_dir(): no SDK registry key %s' % repr(hkey))
             return None
+
+        debug('find_sdk_dir(): Trying SDK Dir: %s'%sdk_dir)
 
         if not os.path.exists(sdk_dir):
             debug('find_sdk_dir():  %s not on file system' % sdk_dir)
@@ -106,16 +109,20 @@ class SDKDefinition:
     def get_sdk_vc_script(self,host_arch, target_arch):
         """ Return the script to initialize the VC compiler installed by SDK
         """
+
+        if (host_arch == 'amd64' and target_arch == 'x86'):
+            # No cross tools needed compiling 32 bits on 64 bit machine
+            host_arch=target_arch
         
         arch_string=target_arch
         if (host_arch != target_arch):
             arch_string='%s_%s'%(host_arch,target_arch)
             
-        #print "arch_string:%s host_arch:%s target_arch:%s"%(arch_string,
-        #                                                   host_arch,
-        #                                                   target_arch)
+        debug("sdk.py: get_sdk_vc_script():arch_string:%s host_arch:%s target_arch:%s"%(arch_string,
+                                                           host_arch,
+                                                           target_arch))
         file=self.vc_setup_scripts.get(arch_string,None)
-        #print "FILE:%s"%file
+        debug("sdk.py: get_sdk_vc_script():file:%s"%file)
         return file
 
 class WindowsSDK(SDKDefinition):
@@ -145,11 +152,17 @@ preSDK61VCSetupScripts = { 'x86'      : r'bin\vcvars32.bat',
                            'x86_ia64' : r'bin\vcvarsx86_ia64.bat',
                            'ia64'     : r'bin\vcvarsia64.bat'}
 
-SDk61AndLaterVCSetupScripts = {'x86'      : r'bin\vcvars32.bat',
-                               'amd64'    : r'bin\amd64\vcvarsamd64.bat',
-                               'x86_amd64': r'bin\x86_amd64\vcvarsx86_amd64.bat',
-                               'x86_ia64' : r'bin\x86_ia64\vcvarsx86_ia64.bat',
-                               'ia64'     : r'bin\ia64\vcvarsia64.bat'}
+SDK61VCSetupScripts = {'x86'      : r'bin\vcvars32.bat',
+                       'amd64'    : r'bin\amd64\vcvarsamd64.bat',
+                       'x86_amd64': r'bin\x86_amd64\vcvarsx86_amd64.bat',
+                       'x86_ia64' : r'bin\x86_ia64\vcvarsx86_ia64.bat',
+                       'ia64'     : r'bin\ia64\vcvarsia64.bat'}
+
+SDK70VCSetupScripts =    { 'x86'      : r'bin\vcvars32.bat',
+                           'amd64'    : r'bin\vcvars64.bat',
+                           'x86_amd64': r'bin\vcvarsx86_amd64.bat',
+                           'x86_ia64' : r'bin\vcvarsx86_ia64.bat',
+                           'ia64'     : r'bin\vcvarsia64.bat'}
 
 # The list of support SDKs which we know how to detect.
 #
@@ -167,7 +180,7 @@ SupportedSDKList = [
                    'x86_64'    : [r'lib\x64'],
                    'ia64'      : [r'lib\ia64'],
                },
-               vc_setup_scripts = SDk61AndLaterVCSetupScripts,
+               vc_setup_scripts = SDK70VCSetupScripts,
               ),
     WindowsSDK('6.1',
                sanity_check_file=r'bin\SetEnv.Cmd',
@@ -177,7 +190,7 @@ SupportedSDKList = [
                    'x86_64'    : [r'lib\x64'],
                    'ia64'      : [r'lib\ia64'],
                },
-               vc_setup_scripts = SDk61AndLaterVCSetupScripts,
+               vc_setup_scripts = SDK61VCSetupScripts,
               ),
 
     WindowsSDK('6.0A',
@@ -227,13 +240,14 @@ InstalledSDKMap = None
 def get_installed_sdks():
     global InstalledSDKList
     global InstalledSDKMap
+    debug('sdk.py:get_installed_sdks()')
     if InstalledSDKList is None:
         InstalledSDKList = []
         InstalledSDKMap = {}
         for sdk in SupportedSDKList:
-            debug('trying to find SDK %s' % sdk.version)
+            debug('MSCommon/sdk.py: trying to find SDK %s' % sdk.version)
             if sdk.get_sdk_dir():
-                debug('found SDK %s' % sdk.version)
+                debug('MSCommon/sdk.py:found SDK %s' % sdk.version)
                 InstalledSDKList.append(sdk)
                 InstalledSDKMap[sdk.version] = sdk
     return InstalledSDKList
@@ -309,13 +323,17 @@ def get_default_sdk():
         return None
     return InstalledSDKList[0]
 
+
+
+
 def mssdk_setup_env(env):
-    debug('mssdk_setup_env()')
+    debug('sdk.py:mssdk_setup_env()')
     if 'MSSDK_DIR' in env:
         sdk_dir = env['MSSDK_DIR']
         if sdk_dir is None:
             return
         sdk_dir = env.subst(sdk_dir)
+        debug('sdk.py:mssdk_setup_env: Using MSSDK_DIR:%s'%sdk_dir)
     elif 'MSSDK_VERSION' in env:
         sdk_version = env['MSSDK_VERSION']
         if sdk_version is None:
@@ -324,18 +342,22 @@ def mssdk_setup_env(env):
         sdk_version = env.subst(sdk_version)
         mssdk = get_sdk_by_version(sdk_version)
         sdk_dir = mssdk.get_sdk_dir()
+        debug('sdk.py:mssdk_setup_env: Using MSSDK_VERSION:%s'%sdk_dir)
     elif 'MSVS_VERSION' in env:
         msvs_version = env['MSVS_VERSION']
-        debug('Getting MSVS_VERSION from env:%s'%msvs_version)
+        debug('sdk.py:mssdk_setup_env:Getting MSVS_VERSION from env:%s'%msvs_version)
         if msvs_version is None:
+            debug('sdk.py:mssdk_setup_env thinks msvs_version is None')
             return
         msvs_version = env.subst(msvs_version)
         import vs
         msvs = vs.get_vs_by_version(msvs_version)
-        debug('msvs is :%s'%msvs)
+        debug('sdk.py:mssdk_setup_env:msvs is :%s'%msvs)
         if not msvs:
+            debug('sdk.py:mssdk_setup_env: no VS version detected, bailingout:%s'%msvs)
             return
         sdk_version = msvs.sdk_version
+        debug('sdk.py:msvs.sdk_version is %s'%sdk_version)
         if not sdk_version:
             return
         mssdk = get_sdk_by_version(sdk_version)
@@ -344,11 +366,13 @@ def mssdk_setup_env(env):
             if not mssdk:
                 return
         sdk_dir = mssdk.get_sdk_dir()
+        debug('sdk.py:mssdk_setup_env: Using MSVS_VERSION:%s'%sdk_dir)
     else:
         mssdk = get_default_sdk()
         if not mssdk:
             return
         sdk_dir = mssdk.get_sdk_dir()
+        debug('sdk.py:mssdk_setup_env: not using any env values. sdk_dir:%s'%sdk_dir)
 
     set_sdk_by_directory(env, sdk_dir)
 

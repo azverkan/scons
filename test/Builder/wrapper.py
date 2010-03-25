@@ -24,56 +24,46 @@
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
-import TestSCons
+"""
+Test the ability to use a direct Python function to wrap
+calls to other Builder(s).
+"""
 
-_python_ = TestSCons._python_
-_exe = TestSCons._exe
+import TestSCons
 
 test = TestSCons.TestSCons()
 
-
-
-test.write('myrpcgen.py', """
-import getopt
-import sys
-cmd_opts, args = getopt.getopt(sys.argv[1:], 'chlmo:', [])
-for opt, arg in cmd_opts:
-    if opt == '-o': output = open(arg, 'wb')
-output.write(" ".join(sys.argv) + "\\n")
-for a in args:
-    contents = open(a, 'rb').read()
-    output.write(contents.replace('RPCGEN', 'myrpcgen.py'))
-output.close()
-sys.exit(0)
+test.write('SConstruct', """
+import os.path
+import string
+def cat(target, source, env):
+    fp = open(str(target[0]), 'wb')
+    for s in map(str, source):
+        fp.write(open(s, 'rb').read())
+Cat = Builder(action=cat)
+def Wrapper(env, target, source):
+    if not target:
+        target = [string.replace(str(source[0]), '.in', '.wout')]
+    t1 = 't1-'+str(target[0])
+    source = 's-'+str(source[0])
+    env.Cat(t1, source)
+    t2 = 't2-'+str(target[0])
+    env.Cat(t2, source)
+env = Environment(BUILDERS = {'Cat' : Cat,
+                              'Wrapper' : Wrapper})
+env.Wrapper('f1.out', 'f1.in')
+env.Wrapper('f2.in')
 """)
 
-test.write('SConstruct', """\
-env = Environment(RPCGEN = r'%(_python_)s myrpcgen.py',
-                  tools=['default', 'rpcgen'])
-env.RPCGenHeader('rpcif')
-env.RPCGenClient('rpcif')
-env.RPCGenService('rpcif')
-env.RPCGenXDR('rpcif')
-""" % locals())
-
-test.write('rpcif.x', """\
-RPCGEN
-""")
+test.write('s-f1.in', "s-f1.in\n")
+test.write('s-f2.in', "s-f2.in\n")
 
 test.run()
 
-output = "myrpcgen.py %s -o %s rpcif.x\nmyrpcgen.py\n"
-expect_clnt = output % ('-l', test.workpath('rpcif_clnt.c'))
-expect_h = output % ('-h', test.workpath('rpcif.h'))
-expect_svc = output % ('-m', test.workpath('rpcif_svc.c'))
-expect_xdr = output % ('-c', test.workpath('rpcif_xdr.c'))
-
-test.must_match('rpcif_clnt.c', expect_clnt)
-test.must_match('rpcif.h', expect_h)
-test.must_match('rpcif_svc.c', expect_svc)
-test.must_match('rpcif_xdr.c', expect_xdr)
-
-
+test.must_match('t1-f1.out', "s-f1.in\n")
+test.must_match('t1-f2.wout', "s-f2.in\n")
+test.must_match('t2-f1.out', "s-f1.in\n")
+test.must_match('t2-f2.wout', "s-f2.in\n")
 
 test.pass_test()
 
