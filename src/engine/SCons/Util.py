@@ -33,7 +33,6 @@ import SCons.compat
 
 import copy
 import os
-import os.path
 import re
 import sys
 import types
@@ -154,11 +153,11 @@ def get_environment_var(varstr):
     else:
         return None
 
-class DisplayEngine:
-    def __init__(self):
-        self.__call__ = self.print_it
-
-    def print_it(self, text, append_newline=1):
+class DisplayEngine(object):
+    print_it = True
+    def __call__(self, text, append_newline=1):
+        if not self.print_it:
+            return
         if append_newline: text = text + '\n'
         try:
             sys.stdout.write(unicode(text))
@@ -172,14 +171,8 @@ class DisplayEngine:
             # before SCons exits.
             pass
 
-    def dont_print(self, text, append_newline=1):
-        pass
-
     def set_mode(self, mode):
-        if mode:
-            self.__call__ = self.print_it
-        else:
-            self.__call__ = self.dont_print
+        self.print_it = mode
 
 def render_tree(root, child_func, prune=0, margin=[0], visited={}):
     """
@@ -482,7 +475,7 @@ def _semi_deepcopy_inst(x):
         return x.__class__(_semi_deepcopy_list(x))
     else:
         return x
-d[types.InstanceType] = _semi_deepcopy_inst
+d[InstanceType] = _semi_deepcopy_inst
 
 def semi_deepcopy(x):
     copier = _semi_deepcopy_dispatch.get(type(x))
@@ -493,7 +486,7 @@ def semi_deepcopy(x):
 
 
 
-class Proxy:
+class Proxy(object):
     """A simple generic Proxy class, forwarding all calls to
     subject.  So, for the benefit of the python newbie, what does
     this really mean?  Well, it means that you can take an object, let's
@@ -511,25 +504,51 @@ class Proxy:
 
                  x = objA.var1
 
-    Inherit from this class to create a Proxy."""
+    Inherit from this class to create a Proxy.
+
+    Note that, with new-style classes, this does *not* work transparently
+    for Proxy subclasses that use special .__*__() method names, because
+    those names are now bound to the class, not the individual instances.
+    You now need to know in advance which .__*__() method names you want
+    to pass on to the underlying Proxy object, and specifically delegate
+    their calls like this:
+
+        class Foo(Proxy):
+            __str__ = Delegate('__str__')
+    """
 
     def __init__(self, subject):
         """Wrap an object as a Proxy object"""
-        self.__subject = subject
+        self._subject = subject
 
     def __getattr__(self, name):
         """Retrieve an attribute from the wrapped object.  If the named
            attribute doesn't exist, AttributeError is raised"""
-        return getattr(self.__subject, name)
+        return getattr(self._subject, name)
 
     def get(self):
         """Retrieve the entire wrapped object"""
-        return self.__subject
+        return self._subject
 
     def __cmp__(self, other):
-        if issubclass(other.__class__, self.__subject.__class__):
-            return cmp(self.__subject, other)
+        if issubclass(other.__class__, self._subject.__class__):
+            return cmp(self._subject, other)
         return cmp(self.__dict__, other.__dict__)
+
+class Delegate(object):
+    """A Python Descriptor class that delegates attribute fetches
+    to an underlying wrapped subject of a Proxy.  Typical use:
+
+        class Foo(Proxy):
+            __str__ = Delegate('__str__')
+    """
+    def __init__(self, attribute):
+        self.attribute = attribute
+    def __get__(self, obj, cls):
+        if isinstance(obj, cls):
+            return getattr(obj._subject, self.attribute)
+        else:
+            return self
 
 # attempt to load the windows registry module:
 can_read_reg = 0
@@ -1151,7 +1170,7 @@ def uniquer_hashables(seq):
 
 # Much of the logic here was originally based on recipe 4.9 from the
 # Python CookBook, but we had to dumb it way down for Python 1.5.2.
-class LogicalLines:
+class LogicalLines(object):
 
     def __init__(self, fileobj):
         self.fileobj = fileobj
@@ -1271,7 +1290,7 @@ class UniqueList(UserList):
         self.unique = False
 
 
-class Unbuffered:
+class Unbuffered(object):
     """
     A proxy class that wraps a file object, flushing after every write,
     and delegating everything else to the wrapped object.
@@ -1336,7 +1355,7 @@ def make_path_relative(path):
 #	ASPN: Python Cookbook : Dynamically added methods to a class
 #	http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/81732
 
-def AddMethod(object, function, name = None):
+def AddMethod(obj, function, name=None):
     """
     Adds either a bound method to an instance or an unbound method to
     a class. If name is ommited the name of the specified function
@@ -1356,14 +1375,12 @@ def AddMethod(object, function, name = None):
     else:
         function = RenameFunction(function, name)
 
-    try:
-        klass = object.__class__
-    except AttributeError:
-        # "object" is really a class, so it gets an unbound method.
-        object.__dict__[name] = types.MethodType(function, None, object)
+    if hasattr(obj, '__class__') and obj.__class__ is not type:
+        # "obj" is an instance, so it gets a bound method.
+        setattr(obj, name, types.MethodType(function, obj, obj.__class__))
     else:
-        # "object" is really an instance, so it gets a bound method.
-        object.__dict__[name] = types.MethodType(function, object, klass)
+        # "obj" is a class, so it gets an unbound method.
+        setattr(obj, name, types.MethodType(function, None, obj))
 
 def RenameFunction(function, name):
     """
@@ -1443,12 +1460,12 @@ def silent_intern(x):
 # ASPN: Python Cookbook: Null Object Design Pattern
 
 #TODO??? class Null(object):
-class Null:
+class Null(object):
     """ Null objects always and reliably "do nothing." """
     def __new__(cls, *args, **kwargs):
-        if not '_inst' in vars(cls):
-            cls._inst = type.__new__(cls, *args, **kwargs)
-        return cls._inst
+        if not '_instance' in vars(cls):
+            cls._instance = super(Null, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
     def __init__(self, *args, **kwargs):
         pass
     def __call__(self, *args, **kwargs):

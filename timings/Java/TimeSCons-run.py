@@ -21,41 +21,35 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-__revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
+"""
+This configuration times simple Java compilation.
 
-__doc__ = """Module to define supported Windows chip architectures.
+We create $JAVA_COUNT on-disk Java files in a 'src' subdirectory,
+and the SConstruct file builds them.  That's it.
 """
 
-import os
+import TestSCons
 
-class ArchDefinition(object):
-    """
-    A class for defining architecture-specific settings and logic.
-    """
-    def __init__(self, arch, synonyms=[]):
-        self.arch = arch
-        self.synonyms = synonyms
+# Full-build time of just under 10 seconds on ubuntu-timings slave,
+# as determined by bin/calibrate.py on 21 May 2010:
+#
+# run   1:  14.564:  JAVA_COUNT=100
+# run   2:   9.692:  JAVA_COUNT=68
+# run   3:   9.654:  JAVA_COUNT=68
+# run   4:   9.635:  JAVA_COUNT=68
 
-SupportedArchitectureList = [
-    ArchitectureDefinition(
-        'x86',
-        ['i386', 'i486', 'i586', 'i686'],
-    ),
+test = TestSCons.TimeSCons(variables={'JAVA_COUNT':68})
 
-    ArchitectureDefinition(
-        'x86_64',
-        ['AMD64', 'amd64', 'em64t', 'EM64T', 'x86_64'],
-    ),
+test.subdir('src')
 
-    ArchitectureDefinition(
-        'ia64',
-        ['IA64'],
-    ),
-]
+contents = """\
+package src;
+public class j%04d {}
+"""
 
-SupportedArchitectureMap = {}
-for a in SupportedArchitectureList:
-    SupportedArchitectureMap[a.arch] = a
-    for s in a.synonyms:
-        SupportedArchitectureMap[s] = a
+for d in range(test.variables['JAVA_COUNT']):
+    test.write(['src', 'j%04d.java' % d], contents % d)
 
+test.main()
+
+test.pass_test()

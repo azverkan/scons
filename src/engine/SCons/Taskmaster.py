@@ -73,7 +73,7 @@ NODE_FAILED = SCons.Node.failed
 
 CollectStats = None
 
-class Stats:
+class Stats(object):
     """
     A simple class for holding statistics about the disposition of a
     Node by the Taskmaster.  If we're collecting statistics, each Node
@@ -110,7 +110,7 @@ def dump_stats():
 
 
 
-class Task:
+class Task(object):
     """
     Default SCons build engine task.
 
@@ -201,8 +201,9 @@ class Task:
         # Deprecation Cycle) so the desired behavior is explicitly
         # determined by which concrete subclass is used.
         #raise NotImplementedError
-        msg = ('Direct use of the Taskmaster.Task class will be deprecated\n'
-               + '\tin a future release.')
+        msg = ('Taskmaster.Task is an abstract base class; instead of\n'
+              '\tusing it directly, '
+              'derive from it and override the abstract methods.')
         SCons.Warnings.warn(SCons.Warnings.TaskmasterNeedsExecuteWarning, msg)
         return True
 
@@ -549,7 +550,7 @@ def find_cycle(stack, visited):
     return None
 
 
-class Taskmaster:
+class Taskmaster(object):
     """
     The Taskmaster for walking the dependency DAG.
     """

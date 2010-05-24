@@ -59,7 +59,7 @@ import SCons.Tool
 import SCons.Util
 import SCons.Warnings
 
-class _Null:
+class _Null(object):
     pass
 
 _null = _Null
@@ -194,7 +194,7 @@ def _delete_duplicates(l, keep_last):
 # BuilderWrapper a subclass that overrides __call__() to enforce specific
 # Builder calling conventions, simplified some of our higher-layer code.
 
-class MethodWrapper:
+class MethodWrapper(object):
     """
     A generic Wrapper class that associates a method (which can
     actually be any callable) with an object.  As part of creating this
@@ -335,7 +335,7 @@ def is_valid_construction_var(varstr):
 
 
 
-class SubstitutionEnvironment:
+class SubstitutionEnvironment(object):
     """Base class for different flavors of construction environments.
 
     This class contains a minimal set of methods that handle contruction

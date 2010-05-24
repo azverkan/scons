@@ -21,41 +21,5 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-__revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
-
-__doc__ = """Module to define supported Windows chip architectures.
-"""
-
-import os
-
-class ArchDefinition(object):
-    """
-    A class for defining architecture-specific settings and logic.
-    """
-    def __init__(self, arch, synonyms=[]):
-        self.arch = arch
-        self.synonyms = synonyms
-
-SupportedArchitectureList = [
-    ArchitectureDefinition(
-        'x86',
-        ['i386', 'i486', 'i586', 'i686'],
-    ),
-
-    ArchitectureDefinition(
-        'x86_64',
-        ['AMD64', 'amd64', 'em64t', 'EM64T', 'x86_64'],
-    ),
-
-    ArchitectureDefinition(
-        'ia64',
-        ['IA64'],
-    ),
-]
-
-SupportedArchitectureMap = {}
-for a in SupportedArchitectureList:
-    SupportedArchitectureMap[a.arch] = a
-    for s in a.synonyms:
-        SupportedArchitectureMap[s] = a
-
+env = Environment()
+env.Java('classes', 'src')

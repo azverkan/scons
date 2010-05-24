@@ -89,7 +89,7 @@ progress_display = SCons.Util.DisplayEngine()
 first_command_start = None
 last_command_end = None
 
-class Progressor:
+class Progressor(object):
     prev = ''
     count = 0
     target_string = '$TARGET'
@@ -207,12 +207,10 @@ class BuildTask(SCons.Taskmaster.OutOfDateTask):
         t = self.targets[0]
         if self.top and not t.has_builder() and not t.side_effect:
             if not t.exists():
-                def classname(obj):
-                    return str(obj.__class__).split('.')[-1]
-                if classname(t) in ('File', 'Dir', 'Entry'):
-                    errstr="Do not know how to make %s target `%s' (%s)." % (classname(t), t, t.abspath)
+                if t.__class__.__name__ in ('File', 'Dir', 'Entry'):
+                    errstr="Do not know how to make %s target `%s' (%s)." % (t.__class__.__name__, t, t.abspath)
                 else: # Alias or Python or ...
-                    errstr="Do not know how to make %s target `%s'." % (classname(t), t)
+                    errstr="Do not know how to make %s target `%s'." % (t.__class__.__name__, t)
                 sys.stderr.write("scons: *** " + errstr)
                 if not self.options.keep_going:
                     sys.stderr.write("  Stop.")
@@ -398,7 +396,7 @@ class QuestionTask(SCons.Taskmaster.AlwaysTask):
         pass
 
 
-class TreePrinter:
+class TreePrinter(object):
     def __init__(self, derived=False, prune=False, status=False):
         self.derived = derived
         self.prune = prune
@@ -440,7 +438,7 @@ this_build_status = 0 # "exit status" of an individual build
 num_jobs = None
 delayed_warnings = []
 
-class FakeOptionParser:
+class FakeOptionParser(object):
     """
     A do-nothing option parser, used for the initial OptionsParser variable.
 
@@ -452,7 +450,7 @@ class FakeOptionParser:
     without blowing up.
 
     """
-    class FakeOptionValues:
+    class FakeOptionValues(object):
         def __getattr__(self, attr):
             return None
     values = FakeOptionValues()
@@ -474,7 +472,7 @@ def SetOption(name, value):
     return OptionsParser.values.set_option(name, value)
 
 #
-class Stats:
+class Stats(object):
     def __init__(self):
         self.stats = []
         self.labels = []
