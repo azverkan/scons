@@ -20,19 +20,28 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Test transparent RCS checkouts from an RCS subdirectory.
+Test explicit checkouts from local RCS files.
 """
 
 import os
 
 import TestSCons
 
-test = TestSCons.TestSCons()
+test = TestSCons.TestSCons(match = TestSCons.match_re_dotall)
+
+test.write('SConscript', """
+Environment(tools = ['RCS']).RCS()
+""")
+
+msg_rcs = """The RCS() factory is deprecated and there is no replacement."""
+warn_rcs = test.deprecated_fatal('deprecated-build-dir', msg_rcs)
+msg_sc = """SourceCode() has been deprecated and there is no replacement.
+\tIf you need this function, please contact dev@scons.tigris.org."""
+warn_sc = test.deprecated_wrap(msg_sc)
 
 rcs = test.where_is('rcs')
 if not rcs:
@@ -40,9 +49,10 @@ if not rcs:
 
 ci = test.where_is('ci')
 if not ci:
-    test.skip_test("Could not find 'ci'; skipping test(s).\n")
+    test.skip_test("Could not find `ci' command, skipping test(s).\n")
 
 
+test.subdir('sub')
 
 sub_RCS = os.path.join('sub', 'RCS')
 sub_SConscript = os.path.join('sub', 'SConscript')
@@ -54,16 +64,9 @@ sub_eee_out = os.path.join('sub', 'eee.out')
 sub_fff_in = os.path.join('sub', 'fff.in')
 sub_fff_out = os.path.join('sub', 'fff.out')
 
-test.subdir('RCS', 'sub', ['sub', 'RCS'])
-
 for f in ['aaa.in', 'bbb.in', 'ccc.in']:
     test.write(f, "%s\n" % f)
     args = "-f -t%s %s" % (f, f)
-    test.run(program = ci, arguments = args, stderr = None)
-
-for f in ['ddd.in', 'eee.in', 'fff.in']:
-    test.write(['sub', f], "sub/%s\n" % f)
-    args = "-f -tsub/%s sub/%s" % (f, f)
     test.run(program = ci, arguments = args, stderr = None)
 
 test.write(['sub', 'SConscript'], """\
@@ -76,17 +79,23 @@ env.Cat('all', ['ddd.out', 'eee.out', 'fff.out'])
 args = "-f -tsub/SConscript sub/SConscript"
 test.run(program = ci, arguments = args, stderr = None)
 
+for f in ['ddd.in', 'eee.in', 'fff.in']:
+    test.write(['sub', f], "sub/%s\n" % f)
+    args = "-f -tsub/%s sub/%s" % (f, f)
+    test.run(program = ci, arguments = args, stderr = None)
+
 test.no_result(os.path.exists(test.workpath('aaa.in')))
 test.no_result(os.path.exists(test.workpath('bbb.in')))
 test.no_result(os.path.exists(test.workpath('ccc.in')))
 
 test.no_result(os.path.exists(test.workpath('sub', 'SConscript')))
 
-test.no_result(os.path.exists(test.workpath('sub', 'aaa.in')))
-test.no_result(os.path.exists(test.workpath('sub', 'bbb.in')))
-test.no_result(os.path.exists(test.workpath('sub', 'ccc.in')))
+test.no_result(os.path.exists(test.workpath('sub', 'ddd.in')))
+test.no_result(os.path.exists(test.workpath('sub', 'eee.in')))
+test.no_result(os.path.exists(test.workpath('sub', 'fff.in')))
 
 test.write('SConstruct', """
+SetOption('warn', 'deprecated-source-code')
 import os
 for key in ['LOGNAME', 'USERNAME', 'USER']:
     logname = os.environ.get(key)
@@ -99,13 +108,15 @@ def cat(env, source, target):
     for src in source:
         f.write(open(str(src), "rb").read())
     f.close()
+env = Environment(ENV=ENV,
+                  BUILDERS={'Cat':Builder(action=cat)},
+                  RCS_COFLAGS='-q')
 DefaultEnvironment()['ENV'] = ENV
-DefaultEnvironment()['RCS_COFLAGS'] = '-l'
-env = Environment(ENV=ENV, BUILDERS={'Cat':Builder(action=cat)})
 env.Cat('aaa.out', 'aaa.in')
 env.Cat('bbb.out', 'bbb.in')
 env.Cat('ccc.out', 'ccc.in')
 env.Cat('all', ['aaa.out', 'bbb.out', 'ccc.out'])
+env.SourceCode('.', env.RCS())
 SConscript('sub/SConscript', "env")
 """)
 
@@ -113,41 +124,30 @@ test.write('bbb.in', "checked-out bbb.in\n")
 
 test.write(['sub', 'eee.in'], "checked-out sub/eee.in\n")
 
-test.run(arguments = '.',
-         stdout = test.wrap_stdout(read_str = """\
-co -l %(sub_SConscript)s
-""" % locals(),
-                                   build_str = """\
-co -l aaa.in
+read_str = """\
+co -q %(sub_SConscript)s
+""" % locals()
+
+build_str = """\
+co -q aaa.in
 cat(["aaa.out"], ["aaa.in"])
 cat(["bbb.out"], ["bbb.in"])
-co -l ccc.in
+co -q ccc.in
 cat(["ccc.out"], ["ccc.in"])
 cat(["all"], ["aaa.out", "bbb.out", "ccc.out"])
-co -l %(sub_ddd_in)s
+co -q %(sub_ddd_in)s
 cat(["%(sub_ddd_out)s"], ["%(sub_ddd_in)s"])
 cat(["%(sub_eee_out)s"], ["%(sub_eee_in)s"])
-co -l %(sub_fff_in)s
+co -q %(sub_fff_in)s
 cat(["%(sub_fff_out)s"], ["%(sub_fff_in)s"])
 cat(["%(sub_all)s"], ["%(sub_ddd_out)s", "%(sub_eee_out)s", "%(sub_fff_out)s"])
-""" % locals()),
-         stderr = """\
-%(sub_RCS)s/SConscript,v  -->  %(sub_SConscript)s
-revision 1.1 (locked)
-done
-RCS/aaa.in,v  -->  aaa.in
-revision 1.1 (locked)
-done
-RCS/ccc.in,v  -->  ccc.in
-revision 1.1 (locked)
-done
-%(sub_RCS)s/ddd.in,v  -->  %(sub_ddd_in)s
-revision 1.1 (locked)
-done
-%(sub_RCS)s/fff.in,v  -->  %(sub_fff_in)s
-revision 1.1 (locked)
-done
-""" % locals())
+""" % locals()
+
+stdout = test.wrap_stdout(read_str = read_str, build_str = build_str)
+
+test.run(arguments = '.',
+         stdout = TestSCons.re_escape(stdout),
+         stderr = warn_rcs + warn_sc)
 
 # Checking things back out of RCS apparently messes with the line
 # endings, so read the result files in non-binary mode.
@@ -160,15 +160,13 @@ test.must_match(['sub', 'all'],
                 "sub/ddd.in\nchecked-out sub/eee.in\nsub/fff.in\n",
                 mode='r')
 
-test.must_be_writable(test.workpath('sub', 'SConscript'))
-test.must_be_writable(test.workpath('aaa.in'))
-test.must_be_writable(test.workpath('ccc.in'))
-test.must_be_writable(test.workpath('sub', 'ddd.in'))
-test.must_be_writable(test.workpath('sub', 'fff.in'))
+test.must_not_be_writable(test.workpath('sub', 'SConscript'))
+test.must_not_be_writable(test.workpath('aaa.in'))
+test.must_not_be_writable(test.workpath('ccc.in'))
+test.must_not_be_writable(test.workpath('sub', 'ddd.in'))
+test.must_not_be_writable(test.workpath('sub', 'fff.in'))
 
 
-
-#
 test.pass_test()
 
 # Local Variables:

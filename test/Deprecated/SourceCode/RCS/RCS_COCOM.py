@@ -20,25 +20,34 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#
 
 __revision__ = "__FILE__ __REVISION__ __DATE__ __DEVELOPER__"
 
 """
-Test customizing the output with the the $BITKEEPERCOMSTR variable.
+Test setting the $RCS_COCOM variable.
 """
 
-import os.path
+import os
 
 import TestSCons
 
 _python_ = TestSCons._python_
 
-test = TestSCons.TestSCons()
+test = TestSCons.TestSCons(match = TestSCons.match_re_dotall)
 
-test.subdir('BitKeeper', ['BitKeeper', 'sub'], 'sub')
+test.write('SConscript', """
+Environment(tools = ['RCS']).RCS()
+""")
 
-sub_BitKeeper = os.path.join('sub', 'BitKeeper')
+msg_rcs = """The RCS() factory is deprecated and there is no replacement."""
+warn_rcs = test.deprecated_fatal('deprecated-build-dir', msg_rcs)
+msg_sc = """SourceCode() has been deprecated and there is no replacement.
+\tIf you need this function, please contact dev@scons.tigris.org."""
+warn_sc = test.deprecated_wrap(msg_sc)
+
+test.subdir('RCS', ['RCS', 'sub'], 'sub')
+
+sub_RCS = os.path.join('sub', 'RCS')
 sub_SConscript = os.path.join('sub', 'SConscript')
 sub_all = os.path.join('sub', 'all')
 sub_ddd_in = os.path.join('sub', 'ddd.in')
@@ -48,33 +57,33 @@ sub_eee_out = os.path.join('sub', 'eee.out')
 sub_fff_in = os.path.join('sub', 'fff.in')
 sub_fff_out = os.path.join('sub', 'fff.out')
 
-test.write('my-bk-get.py', """
+test.write('my-rcs-co.py', """
 import shutil
 import sys
 for f in sys.argv[1:]:
-    shutil.copy('BitKeeper/'+f, f)
+    shutil.copy('RCS/'+f, f)
 """)
 
 test.write('SConstruct', """
+SetOption('warn', 'deprecated-source-code')
 def cat(env, source, target):
     target = str(target[0])
     f = open(target, "wb")
     for src in source:
         f.write(open(str(src), "rb").read())
     f.close()
-env = Environment(TOOLS = ['default', 'BitKeeper'],
+env = Environment(TOOLS = ['default', 'RCS'],
                   BUILDERS={'Cat':Builder(action=cat)},
-                  BITKEEPERCOM='%(_python_)s my-bk-get.py $TARGET',
-                  BITKEEPERCOMSTR='Checking out $TARGET from our fake BitKeeper')
+                  RCS_COCOM='%(_python_)s my-rcs-co.py $TARGET')
 env.Cat('aaa.out', 'aaa.in')
 env.Cat('bbb.out', 'bbb.in')
 env.Cat('ccc.out', 'ccc.in')
 env.Cat('all', ['aaa.out', 'bbb.out', 'ccc.out'])
-env.SourceCode('.', env.BitKeeper())
+env.SourceCode('.', env.RCS())
 SConscript('sub/SConscript', "env")
 """ % locals())
 
-test.write(['BitKeeper', 'sub', 'SConscript'], """\
+test.write(['RCS', 'sub', 'SConscript'], """\
 Import("env")
 env.Cat('ddd.out', 'ddd.in')
 env.Cat('eee.out', 'eee.in')
@@ -82,42 +91,46 @@ env.Cat('fff.out', 'fff.in')
 env.Cat('all', ['ddd.out', 'eee.out', 'fff.out'])
 """)
 
-test.write(['BitKeeper', 'aaa.in'], "BitKeeper/aaa.in\n")
+test.write(['RCS', 'aaa.in'], "RCS/aaa.in\n")
 test.write('bbb.in', "checked-out bbb.in\n")
-test.write(['BitKeeper', 'ccc.in'], "BitKeeper/ccc.in\n")
+test.write(['RCS', 'ccc.in'], "RCS/ccc.in\n")
 
-test.write(['BitKeeper', 'sub', 'ddd.in'], "BitKeeper/sub/ddd.in\n")
+test.write(['RCS', 'sub', 'ddd.in'], "RCS/sub/ddd.in\n")
 test.write(['sub', 'eee.in'], "checked-out sub/eee.in\n")
-test.write(['BitKeeper', 'sub', 'fff.in'], "BitKeeper/sub/fff.in\n")
+test.write(['RCS', 'sub', 'fff.in'], "RCS/sub/fff.in\n")
 
-test.run(arguments = '.',
-         stdout = test.wrap_stdout(read_str = """\
-Checking out %(sub_SConscript)s from our fake BitKeeper
-""" % locals(),
-                                   build_str = """\
-Checking out aaa.in from our fake BitKeeper
+read_str = """\
+%(_python_)s my-rcs-co.py %(sub_SConscript)s
+""" % locals()
+
+build_str = """\
+%(_python_)s my-rcs-co.py aaa.in
 cat(["aaa.out"], ["aaa.in"])
 cat(["bbb.out"], ["bbb.in"])
-Checking out ccc.in from our fake BitKeeper
+%(_python_)s my-rcs-co.py ccc.in
 cat(["ccc.out"], ["ccc.in"])
 cat(["all"], ["aaa.out", "bbb.out", "ccc.out"])
-Checking out %(sub_ddd_in)s from our fake BitKeeper
+%(_python_)s my-rcs-co.py %(sub_ddd_in)s
 cat(["%(sub_ddd_out)s"], ["%(sub_ddd_in)s"])
 cat(["%(sub_eee_out)s"], ["%(sub_eee_in)s"])
-Checking out %(sub_fff_in)s from our fake BitKeeper
+%(_python_)s my-rcs-co.py %(sub_fff_in)s
 cat(["%(sub_fff_out)s"], ["%(sub_fff_in)s"])
 cat(["%(sub_all)s"], ["%(sub_ddd_out)s", "%(sub_eee_out)s", "%(sub_fff_out)s"])
-""" % locals()))
+""" % locals()
+
+stdout = test.wrap_stdout(read_str = read_str, build_str = build_str)
+
+test.run(arguments = '.',
+         stdout = TestSCons.re_escape(stdout),
+         stderr = warn_rcs + warn_sc)
 
 test.must_match('all',
-                "BitKeeper/aaa.in\nchecked-out bbb.in\nBitKeeper/ccc.in\n")
+                "RCS/aaa.in\nchecked-out bbb.in\nRCS/ccc.in\n")
 
 test.must_match(['sub', 'all'],
-                "BitKeeper/sub/ddd.in\nchecked-out sub/eee.in\nBitKeeper/sub/fff.in\n")
+                "RCS/sub/ddd.in\nchecked-out sub/eee.in\nRCS/sub/fff.in\n")
 
 
-
-#
 test.pass_test()
 
 # Local Variables:
