@@ -1,4 +1,8 @@
-  A new SCons checkpoint release, 2.0.0.beta.20100531, is now available.
+# __COPYRIGHT__
+# __FILE__ __REVISION__ __DATE__ __DEVELOPER__
+
+  A new SCons checkpoint release, 2.0.0.beta.20100531, is now available on
+  the SCons download page:
   The primary purpose of this release is to remove support for
   Python versions prior to 2.4 and streamline the SCons code base
   using more modern python idioms.
@@ -16,7 +20,7 @@
   for adoption by other software distributions.
 
   Note that a checkpoint release is developed using the same test-driven
-  development methdology as all SCons releases.  Existing SCons
+  development methodology as all SCons releases.  Existing SCons
   functionality should all work as it does in previous releases (except
   for any changes identified in the release notes) and early adopters
   should be able to use a checkpoint release safely for production work
@@ -70,12 +74,13 @@
 
   FIXES
 
-  - None.
+  - MSVC/MSVS/SDK support has been improved. A number of issues with
+    determining the correct version and architecture have been resolved.
 
   IMPROVEMENTS
 
   - Support for Python versions prior to 2.4 has been removed.  As of
-    this writing, we belive that SCons will still work with Python 2.3,
+    this writing, we believe that SCons will still work with Python 2.3,
     but this is not guaranteed.
   - Code paths that included special cases for older Python versions have
     been streamlined.
@@ -98,5 +103,5 @@
     Although code is tested with Python 2.3 and is still believed to work,
     the official new floor is Python 2.4.
 
-  Thanks to Greg Noel, Steven Knight, Dirk Baechle, and W. Trevor King for
-  their contributions to this release.
+  Thanks to Greg Noel, Steven Knight, Dirk Baechle, William Deegan,and 
+  W. Trevor King for their contributions to this release.
