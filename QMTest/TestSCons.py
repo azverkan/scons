@@ -31,7 +31,7 @@ from TestCommon import __all__
 # here provides some independent verification that what we packaged
 # conforms to what we expect.
 
-default_version = '2.0.0'
+default_version = '2.1.0.alpha.yyyymmdd'
 
 copyright_years = '2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010'
 
@@ -141,7 +141,7 @@ file_expr = r"""File "[^"]*", line \d+, in [^\n]+
 
 # re.escape escapes too much.
 def re_escape(str):
-    for c in ['.', '[', ']', '(', ')', '*', '+', '?']:  # Not an exhaustive list.
+    for c in '\\.[]()*+?':   # Not an exhaustive list.
         str = str.replace(c, '\\' + c)
     return str
 
@@ -1062,7 +1062,7 @@ print py_ver
             restore_sconsflags(sconsflags)
         return p
 
-    def wait_for(self, fname, timeout=10.0, popen=None):
+    def wait_for(self, fname, timeout=20.0, popen=None):
         """
         Waits for the specified file name to exist.
         """
@@ -1072,8 +1072,17 @@ print py_ver
                 sys.stderr.write('timed out waiting for %s to exist\n' % fname)
                 if popen:
                     popen.stdin.close()
+                    popen.stdin = None
                     self.status = 1
                     self.finish(popen)
+                stdout = self.stdout()
+                if stdout:
+                    sys.stdout.write(self.banner('STDOUT ') + '\n')
+                    sys.stdout.write(stdout)
+                stderr = self.stderr()
+                if stderr:
+                    sys.stderr.write(self.banner('STDERR ') + '\n')
+                    sys.stderr.write(stderr)
                 self.fail_test()
             time.sleep(1.0)
             waited = waited + 1.0

@@ -72,8 +72,8 @@ test.write('SConstruct', """\
 env = Environment()
 
 kernelDefines = env.Command("header.hh",
-                            [],
-                            Touch("$TARGET"))
+                            "header.hh.in",
+                            Copy('$TARGET', '$SOURCE'))
 
 kernelImporterSource = env.Command(
   "generated.cc", ["%s"],
@@ -105,6 +105,8 @@ test.write('target.cc', """\
 
 #endif
 """)
+
+test.write("header.hh.in", "#define HEADER_HH 1\n")
 
 test.run(arguments = 'target' + _obj)
 

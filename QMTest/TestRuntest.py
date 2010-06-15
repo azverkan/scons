@@ -101,10 +101,8 @@ class TestRuntest(TestCommon):
         temporary directory, duplicating how this test infrastructure
         appears in a normal workspace.
         """
-        set_workpath_runtest = None
         if 'program' not in kw:
             kw['program'] = 'runtest.py'
-            set_workpath_runtest = 1
         if 'interpreter' not in kw:
             kw['interpreter'] = [python, '-tt']
         if 'match' not in kw:
@@ -113,24 +111,17 @@ class TestRuntest(TestCommon):
             kw['workdir'] = ''
 
         try:
-            noqmtest = kw['noqmtest']
+            things_to_copy = kw['things_to_copy']
         except KeyError:
-            noqmtest = 0
+            things_to_copy = [
+                'runtest.py',
+                'QMTest',
+            ]
         else:
-            del kw['noqmtest']
+            del kw['things_to_copy']
 
         orig_cwd = os.getcwd()
         TestCommon.__init__(self, **kw)
-  
-        if not noqmtest:
-            qmtest = self.where_is('qmtest')
-            if not qmtest:
-                self.skip_test("Could not find 'qmtest'; skipping test(s).\n")
-
-        things_to_copy = [
-            'runtest.py',
-            'QMTest',
-        ]
 
         dirs = [os.environ.get('SCONS_RUNTEST_DIR', orig_cwd)]
         
@@ -150,8 +141,7 @@ class TestRuntest(TestCommon):
                     copy_func(t, self.workpath(thing))
                     break
 
-        if set_workpath_runtest:
-            self.program_set(self.workpath('runtest.py'))
+        self.program_set(self.workpath(kw['program']))
 
         for key in os.environ.keys():
             if key[:5] == 'AEGIS':
